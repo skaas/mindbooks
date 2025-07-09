@@ -28,8 +28,12 @@ module.exports = async (req, res) => {
     });
     aiResult = completion.data.choices[0].message.content;
   } catch (e) {
-    // OpenAI 에러 응답을 프론트로 그대로 전달
-    res.status(500).json({ error: 'OpenAI API 호출 실패', detail: e.message, raw: e.response?.data });
+    console.error('OpenAI API 호출 실패:', e.message, e.response?.data);
+    res.status(500).json({ 
+      error: 'OpenAI API 호출 실패', 
+      detail: e.message, 
+      raw: e.response?.data 
+    });
     return;
   }
 
