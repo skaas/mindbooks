@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 
 export default function RecommendForm() {
-  console.log('RecommendForm 컴포넌트 렌더링됨');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -19,6 +18,7 @@ export default function RecommendForm() {
       const data = await res.json();
       setResult(data);
     } catch (e) {
+      console.error('AI 서버 통신 에러:', e);
       alert('AI 서버와 통신에 실패했습니다.');
     }
     setLoading(false);
@@ -26,7 +26,6 @@ export default function RecommendForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl mx-auto bg-white rounded-2xl shadow-lg p-6 md:p-10 mt-10">
-      <div className="absolute top-8 left-2 text-xs text-gray-400">[DEBUG] RecommendForm.jsx 렌더링됨</div>
       <h1 className="text-4xl md:text-5xl font-bold text-gray-800 text-center mb-2">문장 약국 💊</h1>
       <p className="text-gray-500 text-center mb-6">당신의 문장에 마음을 처방해 드립니다.</p>
       <textarea
