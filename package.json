@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "openai": "^4.x.x"
   },
   "devDependencies": {
     "vite": "^4.4.9",
@@ -19,4 +20,5 @@
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.32"
   }
+  
 } 
