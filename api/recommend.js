@@ -1,6 +1,6 @@
-const { Configuration, OpenAIApi } = require('openai');
+import { Configuration, OpenAIApi } from 'openai';
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
@@ -14,7 +14,6 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // 1. OpenAI로 책 추천 받기
   const openai = new OpenAIApi(new Configuration({ apiKey: process.env.OPENAI_API_KEY }));
   let aiResult;
   try {
@@ -28,20 +27,14 @@ module.exports = async (req, res) => {
     });
     aiResult = completion.data.choices[0].message.content;
   } catch (e) {
-    console.error('OpenAI API 호출 실패:', e.message, e.response?.data);
-    res.status(500).json({ 
-      error: 'OpenAI API 호출 실패', 
-      detail: e.message, 
-      raw: e.response?.data 
-    });
+    res.status(500).json({ error: 'OpenAI API 호출 실패', detail: e.message, raw: e.response?.data });
     return;
   }
 
-  // JSON 파싱 및 결과 반환
   try {
     const parsed = JSON.parse(aiResult);
     res.status(200).json(parsed);
   } catch (e) {
     res.status(500).json({ error: 'AI 응답 파싱 실패', detail: e.message, raw: aiResult });
   }
-}; 
+} 
