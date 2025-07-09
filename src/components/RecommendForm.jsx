@@ -15,6 +15,16 @@ export default function RecommendForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userInput: input }),
       });
+
+      // 응답이 200이 아닐 때는 에러 메시지를 텍스트로 받아서 출력
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('API 서버 에러:', errorText);
+        alert('AI 서버에서 오류가 발생했습니다.');
+        setLoading(false);
+        return;
+      }
+
       const data = await res.json();
       setResult(data);
     } catch (e) {
