@@ -18,10 +18,11 @@ export default async function handler(req, res) {
     return;
   }
 
-  // 1단계: gpt-3.5-turbo로 감정 분석 (비용 절약)
+  // 1단계: gpt-4.1-nano로 감정 분석 (비용 절약)
   let emotionCheckResult;
+  let emotionCheck; // 스코프 문제 해결을 위해 밖에서 선언
   try {
-    const emotionCheck = await openai.chat.completions.create({
+    emotionCheck = await openai.chat.completions.create({
       model: 'gpt-4.1-nano',
       messages: [
         {
@@ -65,7 +66,8 @@ export default async function handler(req, res) {
     res.status(200).json({ 
       hasEmotion: false, 
       message: "장난으로 글을 쓰지 마세요.",
-      debug: "감정 분석 실패"
+      debug: "감정 분석 실패",
+      rawResponse: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패"
     });
     return;
   }
@@ -77,7 +79,7 @@ export default async function handler(req, res) {
       hasEmotion: false,
       message: emotionCheckResult.message,
       debug: "1단계에서 감정 없음으로 판단",
-      rawResponse: emotionCheck.choices[0].message.content // 1단계에서 받은 원본 메시지
+      rawResponse: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패" // 1단계에서 받은 원본 메시지
     });
     return;
   }
@@ -134,7 +136,7 @@ export default async function handler(req, res) {
     res.status(200).json({
       hasEmotion: true,
       debug: "2단계 책 추천 완료",
-      step1Response: emotionCheck.choices[0].message.content, // 1단계 응답 포함
+      step1Response: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패", // 1단계 응답 포함
       ...aiResult
     });
   } catch (e) {
@@ -142,7 +144,7 @@ export default async function handler(req, res) {
     res.status(500).json({ 
       error: '책 추천 실패', 
       detail: e.message,
-      step1Response: emotionCheck.choices[0].message.content // 에러 시에도 1단계 응답 포함
+      step1Response: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패" // 에러 시에도 1단계 응답 포함
     });
   }
 }
