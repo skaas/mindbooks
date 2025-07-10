@@ -1,81 +1,108 @@
-import React, { useState, Fragment, useEffect } from 'react';
+import React, { useState, Fragment, useEffect, useRef } from 'react';
 import { Transition } from '@headlessui/react';
+import { Send, Clock } from 'lucide-react';
 
 export default function RecommendForm() {
   const [input, setInput] = useState('');
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [noEmotionMessage, setNoEmotionMessage] = useState('');
-  const [submittedText, setSubmittedText] = useState('');
+  const [showMsg1, setShowMsg1] = useState(false);
+  const [showMsg2, setShowMsg2] = useState(false);
 
-  const [showH1, setShowH1] = useState(false);
-  const [showP1, setShowP1] = useState(false);
-  const [showP2, setShowP2] = useState(false);
-  const [animationsFinished, setAnimationsFinished] = useState(false);
-  const [typedPlaceholder, setTypedPlaceholder] = useState('');
+  // Timeout state
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockoutTime, setLockoutTime] = useState(0);
 
-  const showForm = !loading && !result && !noEmotionMessage;
+  const chatContainerRef = useRef(null);
+  const typingIntervalRef = useRef(null);
 
   useEffect(() => {
-    if (showForm) {
-      // 컴포넌트가 마운트된 후 애니메이션을 트리거하기 위해 짧은 지연을 줍니다.
-      const animationStartTimer = setTimeout(() => {
-        setShowH1(true);
-        setShowP1(true);
-        setShowP2(true);
-      }, 50);
+    // This effect runs only once on mount and handles the initial message sequence
+    const timers = [];
+    if(typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+    
+    setMessages([]);
+    setShowMsg1(false);
+    setShowMsg2(false);
 
-      // 애니메이션이 끝나는 시점에 placeholder 텍스트를 보여주기 위한 타이머
-      const animationFinishTimer = setTimeout(() => {
-        setAnimationsFinished(true);
-      }, 1550); // 총 애니메이션 시간 1500ms + 초기 지연 50ms
+    const msg1 = { id: `${Date.now()}-1`, sender: 'master', content: '黙-묵-MUQ', type: 'h1' };
+    const msg2 = { id: `${Date.now()}-2`, sender: 'master', content: '말 없는 책방', type: 'p' };
+    const typingMessageId = `${Date.now()}-3`;
+    const typingFullContent = '책방 묵(黙)\n이곳은 슬픔을 위한 조용한 책방입니다.\n이름은 묻거나 기록하지 않습니다.\n마스터는 말없이 책으로만 응답합니다.\n\n\n마스터가 조용히 고개를 끄덕입니다.';
+    const msg3 = { id: typingMessageId, sender: 'master', content: '', type: 'p' };
 
-      return () => {
-        clearTimeout(animationStartTimer);
-        clearTimeout(animationFinishTimer);
-      };
-    } else {
-      setShowH1(false);
-      setShowP1(false);
-      setShowP2(false);
-      setAnimationsFinished(false); // 폼이 사라질 때 상태 초기화
-      setTypedPlaceholder(''); // 폼이 사라질 때 상태 초기화
-    }
-  }, [showForm]);
+    setMessages([msg1, msg2, msg3]);
+
+    timers.push(setTimeout(() => setShowMsg1(true), 100)); // Start fade-in for msg1
+    timers.push(setTimeout(() => setShowMsg2(true), 2000)); // Start fade-in for msg2
+    
+    timers.push(setTimeout(() => {
+        typingIntervalRef.current = setInterval(() => {
+            setMessages(prev => {
+                const currentMsg = prev.find(m => m.id === typingMessageId);
+                if (!currentMsg || currentMsg.content.length >= typingFullContent.length) {
+                    clearInterval(typingIntervalRef.current);
+                    return prev;
+                }
+                return prev.map(m => 
+                    m.id === typingMessageId 
+                        ? { ...m, content: typingFullContent.slice(0, m.content.length + 1) } 
+                        : m
+                );
+            });
+        }, 75);
+    }, 2000)); // Start typing with msg2 animation
+
+    return () => {
+        timers.forEach(clearTimeout);
+        if(typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+    };
+  }, []);
 
   useEffect(() => {
-    if (animationsFinished) {
-      const targetText = "마스터가 당신의 고민을 기다립니다.";
-      let index = 0;
-      setTypedPlaceholder(''); // 타이핑 시작 전 초기화
-      const intervalId = setInterval(() => {
-        if (index < targetText.length) {
-          setTypedPlaceholder((prev) => prev + targetText.charAt(index));
-          index++;
-        } else {
-          clearInterval(intervalId);
-        }
-      }, 100); // 타이핑 속도 (ms)
-
-      return () => clearInterval(intervalId); // 컴포넌트 언마운트 시 인터벌 정리
+    // Scroll to bottom when messages change
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [animationsFinished]);
+  }, [messages]);
+  
+  // Timeout countdown timer
+  useEffect(() => {
+    if (isLocked && lockoutTime > 0) {
+      const timer = setTimeout(() => {
+        setLockoutTime(lockoutTime - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (lockoutTime === 0) {
+      setIsLocked(false);
+    }
+  }, [isLocked, lockoutTime]);
 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim()) return;
-    
+    if (!input.trim() || isLocked || loading) return;
+
+    const userMessage = { id: Date.now(), sender: 'user', content: input };
+    const thinkingMessageId = Date.now() + 1;
+    const thinkingMessage = { id: thinkingMessageId, sender: 'master', content: '...' };
+    const originalInput = input; // API 요청에 사용하기 위해 현재 입력을 저장
+
+    // 사용자와 '생각 중' 메시지를 한 번에 추가
+    setMessages(prev => {
+      console.log('[handleSubmit] Adding user message. Prev state:', prev);
+      const nextState = [...prev, userMessage, thinkingMessage].filter(Boolean);
+      console.log('[handleSubmit] Adding user message. Next state:', nextState);
+      return nextState;
+    });
+    setInput('');
     setLoading(true);
-    setResult(null);
-    setNoEmotionMessage('');
-    setSubmittedText(input);
 
     try {
       const res = await fetch('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userInput: input }),
+        body: JSON.stringify({ userInput: originalInput }),
       });
 
       if (!res.ok) {
@@ -84,122 +111,120 @@ export default function RecommendForm() {
 
       const data = await res.json();
       
-      if (data.hasEmotion === false) {
-        setNoEmotionMessage(data.message);
-      } else {
-        setResult({
-          books: (data["실제 존재하는 추천 도서 목록"] || []).map(book => ({
-            title: book["제목"],
-            author: book["작가"],
-            summary: book["한 줄 요약"],
-            reason: book["추천 이유"],
-          })),
-        });
-      }
+      // '생각 중' 메시지를 실제 응답으로 교체
+      setMessages(prev => {
+        console.log('[handleSubmit] API Success. Prev state:', prev);
+        const updatedMessages = prev.filter(msg => msg && msg.id !== thinkingMessageId);
+        if (data.hasEmotion === false) {
+          setIsLocked(true);
+          setLockoutTime(60);
+          const nextState = [...updatedMessages, { id: Date.now(), sender: 'master', content: data.message }].filter(Boolean);
+          console.log('[handleSubmit] API Success (hasEmotion: false). Next state:', nextState);
+          return nextState;
+        } else {
+          const books = (data["실제 존재하는 추천 도서 목록"] || []);
+          const bookMessages = books.map((book, index) => ({
+            id: `${Date.now()}-${index}`,
+            sender: 'master',
+            type: 'book',
+            content: {
+              title: book["제목"],
+              author: book["작가"],
+              summary: book["한 줄 요약"],
+              reason: book["추천 이유"],
+            }
+          }));
+          const nextState = [...updatedMessages, ...bookMessages].filter(Boolean);
+          console.log('[handleSubmit] API Success (hasEmotion: true). Next state:', nextState);
+          return nextState;
+        }
+      });
     } catch (e) {
-      setNoEmotionMessage('책을 추천받지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      // '생각 중' 메시지를 에러 메시지로 교체
+      setMessages(prev => {
+        console.log('[handleSubmit] API Error. Prev state:', prev);
+        const updatedMessages = prev.filter(msg => msg && msg.id !== thinkingMessageId);
+        const errorMessage = { id: Date.now(), sender: 'master', content: '지금은 마스터가 건강이 좋지 않아보입니다. 잠시 후 다시 시도해 주세요.' };
+        const nextState = [...updatedMessages, errorMessage].filter(Boolean);
+        console.log('[handleSubmit] API Error. Next state:', nextState);
+        return nextState;
+      });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-    setInput('');
   };
 
-  return (
-    <div className="w-full max-w-2xl text-center">
-      <Transition
-        as={Fragment}
-        show={showForm}
-        enter="transition-opacity duration-700"
-        enterFrom="opacity-0"
-        enterTo="opacity-100"
-        leave="transition-opacity duration-300"
-        leaveFrom="opacity-100"
-        leaveTo="opacity-0"
-      >
-        <div className="w-[600px] text-center">
-          <header className="mb-12 flex h-28 flex-col justify-center">
-            <h1
-              className={`text-5xl font-serif mb-2 transition-colors duration-[1500ms] delay-[0ms] ${
-                showH1 ? 'text-muk-text' : 'text-muk-bg'
-              }`}
-            >
-              黙
-            </h1>
-            <p
-              className={`text-lg mb-4 transition-colors duration-[1200ms] delay-[300ms] ${
-                showP1 ? 'text-muk-subtext' : 'text-muk-bg'
-              }`}
-            >
-              말 없는 책방
-            </p>
-            <p
-              className={`transition-colors duration-[1000ms] delay-[500ms] ${
-                showP2 ? 'text-muk-text' : 'text-muk-bg'
-              }`}
-            >
-              당신의 한 문장에, 책으로 대답합니다.
-            </p>
-          </header>
+  console.log('%c--- Rendering ---', 'color: yellow; font-weight: bold;');
+  console.log('Current `messages` state:', JSON.stringify(messages, null, 2));
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="h-28 flex items-center justify-center border border-muk-border rounded-lg focus-within:border-muk-point transition-colors duration-300">
-              <textarea
-                autoFocus
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                placeholder={typedPlaceholder}
-                className="w-full h-full p-4 bg-transparent text-center text-lg text-muk-text placeholder:text-muk-subtext placeholder:text-center focus:outline-none resize-none caret-muk-point"
-              />
+  return (
+    <div className="flex flex-col h-screen bg-muk-bg text-muk-text font-serif">
+      {/* Main Content Area */}
+      <main ref={chatContainerRef} className="flex-grow flex flex-col p-4 overflow-y-auto">
+        <div className="w-full max-w-2xl mx-auto space-y-4">
+          {messages.filter(Boolean).map((msg, index) => (
+            <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`rounded-lg px-4 py-2 max-w-lg ${msg.sender === 'user' ? 'bg-muk-point text-white' : ''}`}>
+                {(() => {
+                  if (msg.type === 'h1') {
+                    return <h1 className={`text-5xl font-serif text-center mb-2 transition-colors duration-[1500ms] ${showMsg1 ? 'text-muk-text' : 'text-muk-bg'}`}>{msg.content}</h1>;
+                  }
+                  if (msg.type === 'p' && index === 1) { // "말 없는 책방"
+                    return <p className={`text-lg whitespace-pre-wrap text-left transition-colors duration-[1000ms] ${showMsg2 ? 'text-muk-subtext' : 'text-muk-bg'}`}>{msg.content}</p>;
+                  }
+                  if (msg.type === 'p') { // Other 'p' types like typing message
+                    return <p className="text-lg text-muk-subtext whitespace-pre-wrap text-left">{msg.content}</p>;
+                  }
+                  if (msg.type === 'book') {
+                    return (
+                      <div className="text-left border-t border-muk-border/50 pt-4 mt-2 bg-muk-bg-light p-4 rounded-lg">
+                        <h3 className="text-xl font-serif text-muk-text mb-1">{msg.content.title}</h3>
+                        <p className="text-muk-subtext mb-2 text-sm">{msg.content.author}</p>
+                        <p className="text-muk-text/90 mb-3 text-base">{msg.content.summary}</p>
+                        <p className="text-muk-text/70 text-sm">{msg.content.reason}</p>
+                      </div>
+                    );
+                  }
+                  return <p className="whitespace-pre-wrap">{msg.content}</p>;
+                })()}
+              </div>
             </div>
-            <button 
-              type="submit" 
-              disabled={loading} 
-              className="px-8 py-3 text-muk-subtext hover:text-muk-point disabled:text-gray-300 transition-colors duration-300"
+          ))}
+        </div>
+      </main>
+
+      {/* Input Form Area */}
+      <div className="p-4 border-t border-muk-border/50">
+        {isLocked ? (
+          <div className="flex items-center justify-center text-muk-subtext p-3 bg-muk-bg/50 border border-muk-border/70 rounded-lg">
+            <Clock size={18} className="mr-2"/>
+            {Math.floor(lockoutTime / 60)}분 {lockoutTime % 60}초 후 다시 대화할 수 있습니다.
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex items-center space-x-2 max-w-3xl mx-auto">
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder="이곳에 이야기를 들려주세요..."
+              className="flex-grow p-3 bg-muk-bg/50 border border-muk-border/70 rounded-lg focus:outline-none focus:ring-1 focus:ring-muk-point resize-none"
+              rows="1"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
+            />
+            <button
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="p-3 rounded-full bg-muk-point text-muk-bg disabled:bg-muk-subtext/50 disabled:cursor-not-allowed hover:bg-opacity-80 transition-colors"
             >
-              책을 받아봅니다
+              <Send size={20} />
             </button>
           </form>
-        </div>
-      </Transition>
-
-      {loading && (
-        <div className="w-full text-center text-muk-subtext">
-          <p>당신의 문장을 읽고 있습니다...</p>
-        </div>
-      )}
-
-      <Transition
-        as={Fragment}
-        show={!loading && (!!result || !!noEmotionMessage)}
-        enter="transition-opacity duration-700 delay-300"
-        enterFrom="opacity-0"
-        enterTo="opacity-100"
-        leave="transition-opacity duration-300"
-        leaveFrom="opacity-100"
-        leaveTo="opacity-0"
-      >
-        <div className="w-full">
-          <p className="text-lg text-muk-text mb-12 italic">“{submittedText}”</p>
-          
-          {noEmotionMessage && (
-            <div className="text-muk-subtext">
-              <p>{noEmotionMessage}</p>
-            </div>
-          )}
-
-          {result && (
-            <div className="space-y-12">
-              {(result.books || []).map((book, i) => (
-                <div key={i} className="text-left border-t border-muk-border pt-8">
-                  <h3 className="text-2xl font-serif text-muk-text mb-1">{book.title}</h3>
-                  <p className="text-muk-subtext mb-4">{book.author}</p>
-                  <p className="text-muk-text mb-4">{book.summary}</p>
-                  <p className="text-muk-text text-opacity-80">{book.reason}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Transition>
+        )}
+      </div>
     </div>
   );
 } 
