@@ -1,31 +1,21 @@
-// pages/api/chat.js  (또는 app/api/chat/route.js)
-export const runtime = 'edge';    // Edge Function 으로 동작
-
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-export default async function handler(req) {
-  // Edge 에선 (req, res) 대신 Web Fetch API 사용
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return new Response(
-      JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { 'Content-Type': 'application/json' } }
-    );
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
-  let userInput;
+  let userInput = '';
   try {
-    const body = await req.json();
-    userInput = body.userInput;
-    if (typeof userInput !== 'string') throw new Error();
+    userInput = req.body.userInput || (typeof req.body === 'string' ? JSON.parse(req.body).userInput : '');
   } catch {
-    return new Response(
-      JSON.stringify({ error: 'Invalid request body' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+    res.status(400).json({ error: 'Invalid request body' });
+    return;
   }
 
   let aiResult;
@@ -51,31 +41,36 @@ export default async function handler(req) {
 - 실제 존재하는 책만 추천
 - 가상의 책 생성 금지
 - 결과는 반드시 올바른 JSON만 반환
+
+예시:
+{
+  "감정 키워드": ["외로움", "고독"],
+  "인식/개념 키워드": ["소외"],
+  "실제 존재하는 추천 도서 목록": [
+    {
+      "제목": "외로움에 대하여",
+      "작가": "인그리드 릴레",
+      "한 줄 요약": "외로움의 본질을 탐구하는 인문학적 에세이",
+      "추천 이유": "이 책은 외로움이라는 감정을 깊이 있게 다루며, 외로움이 인간에게 미치는 영향에 대해 고찰합니다."
+    }
+  ]
+}
 `
         },
         { role: 'user', content: userInput }
       ],
-      temperature: 0.9
+      temperature: 0.7,
     });
-
     aiResult = completion.choices[0].message.content;
   } catch (e) {
-    return new Response(
-      JSON.stringify({ error: 'OpenAI API 호출 실패', message: e.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    res.status(500).json({ error: 'OpenAI API 호출 실패', detail: e.message, raw: e.response?.data });
+    return;
   }
 
   try {
     const parsed = JSON.parse(aiResult);
-    return new Response(
-      JSON.stringify(parsed),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
+    res.status(200).json(parsed);
   } catch (e) {
-    return new Response(
-      JSON.stringify({ error: 'AI 응답 파싱 실패', raw: aiResult }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    res.status(500).json({ error: 'AI 응답 파싱 실패', detail: e.message, raw: aiResult });
   }
 }
