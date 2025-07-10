@@ -4,11 +4,13 @@ export default function RecommendForm() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [noEmotionMessage, setNoEmotionMessage] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setResult(null);
+    setNoEmotionMessage('');
     try {
       const res = await fetch('/api/recommend', {
         method: 'POST',
@@ -16,7 +18,6 @@ export default function RecommendForm() {
         body: JSON.stringify({ userInput: input }),
       });
 
-      // 응답이 200이 아닐 때는 에러 메시지를 텍스트로 받아서 출력
       if (!res.ok) {
         const errorText = await res.text();
         alert('AI 서버에서 오류가 발생했습니다.');
@@ -25,6 +26,13 @@ export default function RecommendForm() {
       }
 
       const data = await res.json();
+      
+      if (data.hasEmotion === false) {
+        setNoEmotionMessage(data.message);
+        setLoading(false);
+        return;
+      }
+
       // 서버 응답 키에 맞게 파싱
       setResult({
         emotionKeywords: data["감정 키워드"] || [],
@@ -56,6 +64,11 @@ export default function RecommendForm() {
         {loading ? '처방 중...' : '마음 처방받기'}
       </button>
       {loading && <div className="flex justify-center my-8"><div className="w-12 h-12 border-4 border-gray-200 rounded-full border-t-blue-500 animate-spin"></div></div>}
+      {noEmotionMessage && (
+        <div className="mt-6 text-center text-red-500 bg-red-100 border border-red-400 p-4 rounded-lg">
+          {noEmotionMessage}
+        </div>
+      )}
       {result && (
         <div className="mt-10">
           <div className="bg-gray-50 rounded-lg p-6 mb-8">

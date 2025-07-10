@@ -57,16 +57,12 @@ export default async function handler(req, res) {
       temperature: 0.0, // 더 일관된 결과를 위해 0으로 설정
     });
     
-    console.log('감정 분석 결과:', emotionCheck.choices[0].message.content);
     emotionCheckResult = JSON.parse(emotionCheck.choices[0].message.content);
-    console.log('파싱된 결과:', emotionCheckResult);
   } catch (e) {
-    console.log('감정 분석 에러:', e.message);
     // 에러 발생 시 안전하게 감정 없음으로 처리
     res.status(200).json({ 
       hasEmotion: false, 
       message: "장난으로 글을 쓰지 마세요.",
-      debug: "감정 분석 실패",
       rawResponse: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패"
     });
     return;
@@ -74,17 +70,14 @@ export default async function handler(req, res) {
 
   // 감정이 확인되지 않으면 여기서 종료
   if (!emotionCheckResult.hasEmotion) {
-    console.log('감정 없음 - 종료');
     res.status(200).json({
       hasEmotion: false,
       message: emotionCheckResult.message,
-      debug: "1단계에서 감정 없음으로 판단",
       rawResponse: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패" // 1단계에서 받은 원본 메시지
     });
     return;
   }
 
-  console.log('감정 확인됨 - 책 추천 단계로 진행');
   // 2단계: gpt-4o로 책 추천
   let aiResult;
   try {
@@ -135,12 +128,10 @@ export default async function handler(req, res) {
     // 성공적으로 2단계까지 완료된 경우
     res.status(200).json({
       hasEmotion: true,
-      debug: "2단계 책 추천 완료",
       step1Response: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패", // 1단계 응답 포함
       ...aiResult
     });
   } catch (e) {
-    console.log('책 추천 에러:', e.message);
     res.status(500).json({ 
       error: '책 추천 실패', 
       detail: e.message,
