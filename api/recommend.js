@@ -1,7 +1,7 @@
 // pages/api/chat.js  (또는 app/api/chat/route.js)
 export const runtime = 'edge';    // Edge Function 으로 동작
 
-import { OpenAI } from 'openai-edge';
+import OpenAI from 'openai';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
