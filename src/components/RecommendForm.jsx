@@ -12,6 +12,7 @@ export default function RecommendForm() {
   // Timeout state
   const [isLocked, setIsLocked] = useState(false);
   const [lockoutTime, setLockoutTime] = useState(0);
+  const [offenseCount, setOffenseCount] = useState(0);
 
   const chatContainerRef = useRef(null);
   const typingIntervalRef = useRef(null);
@@ -113,15 +114,31 @@ export default function RecommendForm() {
       
       // '생각 중' 메시지를 실제 응답으로 교체
       setMessages(prev => {
-        console.log('[handleSubmit] API Success. Prev state:', prev);
         const updatedMessages = prev.filter(msg => msg && msg.id !== thinkingMessageId);
+        
         if (data.hasEmotion === false) {
-          setIsLocked(true);
-          setLockoutTime(60);
-          const nextState = [...updatedMessages, { id: Date.now(), sender: 'master', content: data.message }].filter(Boolean);
-          console.log('[handleSubmit] API Success (hasEmotion: false). Next state:', nextState);
-          return nextState;
+          const newOffenseCount = offenseCount + 1;
+          setOffenseCount(newOffenseCount);
+          
+          if (newOffenseCount === 1) {
+            // 1차 경고
+            const warningMessage = {
+              id: Date.now(),
+              sender: 'master',
+              content: "조용히 하세요. 이곳은 고민을 상담하는 공간입니다. 그런게 없다면 나가주세요."
+            };
+            // '생각 중...' 메시지를 경고 메시지로 교체
+            return [...updatedMessages, warningMessage];
+          } else {
+            // 2차 제재 (1분 잠금)
+            setIsLocked(true);
+            setLockoutTime(60);
+            // '생각 중...' 메시지를 제재 메시지로 교체
+            return [...updatedMessages, { id: Date.now(), sender: 'master', content: data.message }];
+          }
         } else {
+          // 정상 응답 시, 페널티 카운트 초기화
+          setOffenseCount(0);
           const books = (data["실제 존재하는 추천 도서 목록"] || []);
           const bookMessages = books.map((book, index) => ({
             id: `${Date.now()}-${index}`,
@@ -134,9 +151,7 @@ export default function RecommendForm() {
               reason: book["추천 이유"],
             }
           }));
-          const nextState = [...updatedMessages, ...bookMessages].filter(Boolean);
-          console.log('[handleSubmit] API Success (hasEmotion: true). Next state:', nextState);
-          return nextState;
+          return [...updatedMessages, ...bookMessages].filter(Boolean);
         }
       });
     } catch (e) {
