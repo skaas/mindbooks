@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   let aiResult;
   try {
     const completion = await openai.chat.completions.create({
-      model: '4-mini-2025-04-16',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'system',
