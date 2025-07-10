@@ -18,6 +18,72 @@ export default async function handler(req, res) {
     return;
   }
 
+  // 1단계: gpt-3.5-turbo로 감정 분석 (비용 절약)
+  let emotionCheckResult;
+  try {
+    const emotionCheck = await openai.chat.completions.create({
+      model: 'gpt-4.1-nano',
+      messages: [
+        {
+          role: 'system',
+          content: `사용자가 쓴 글에서 진정한 감정이나 고민이 있는지 매우 엄격하게 분석합니다.
+
+다음 경우에만 감정이 있다고 판단:
+- 슬픔, 외로움, 우울, 분노, 불안, 스트레스 등 명확한 감정 표현
+- 인생 고민, 관계 문제, 진로 고민 등 구체적인 문제 상황  
+- 깊은 생각이나 철학적 고민
+
+다음은 반드시 감정이 없다고 판단:
+- 단순 인사말: "안녕하세요", "반갑습니다", "hello" 등
+- 일반적인 질문: "이것은 뭐예요?", "어떻게 해요?" 등
+- 의미 없는 테스트 문장: "테스트", "123", "ㅁㄴㅇㄹ" 등
+- 장난스러운 말, 단순 대화
+
+예시:
+- "안녕하세요" → 감정 없음
+- "반갑습니다" → 감정 없음  
+- "테스트입니다" → 감정 없음
+- "요즘 너무 외로워요" → 감정 있음
+- "진로 때문에 고민이에요" → 감정 있음
+
+1. 감정이 드러나지 않으면: {"hasEmotion": false, "message": "장난으로 글을 쓰지 마세요."}
+2. 진정한 감정이 확인되면: {"hasEmotion": true, "message": "감정이 확인되었습니다."}
+
+반드시 위 JSON 형식으로만 응답하세요. 다른 설명은 절대 추가하지 마세요.`
+        },
+        { role: 'user', content: userInput }
+      ],
+      temperature: 0.0, // 더 일관된 결과를 위해 0으로 설정
+    });
+    
+    console.log('감정 분석 결과:', emotionCheck.choices[0].message.content);
+    emotionCheckResult = JSON.parse(emotionCheck.choices[0].message.content);
+    console.log('파싱된 결과:', emotionCheckResult);
+  } catch (e) {
+    console.log('감정 분석 에러:', e.message);
+    // 에러 발생 시 안전하게 감정 없음으로 처리
+    res.status(200).json({ 
+      hasEmotion: false, 
+      message: "장난으로 글을 쓰지 마세요.",
+      debug: "감정 분석 실패"
+    });
+    return;
+  }
+
+  // 감정이 확인되지 않으면 여기서 종료
+  if (!emotionCheckResult.hasEmotion) {
+    console.log('감정 없음 - 종료');
+    res.status(200).json({
+      hasEmotion: false,
+      message: emotionCheckResult.message,
+      debug: "1단계에서 감정 없음으로 판단",
+      rawResponse: emotionCheck.choices[0].message.content // 1단계에서 받은 원본 메시지
+    });
+    return;
+  }
+
+  console.log('감정 확인됨 - 책 추천 단계로 진행');
+  // 2단계: gpt-4o로 책 추천
   let aiResult;
   try {
     const completion = await openai.chat.completions.create({
@@ -61,16 +127,22 @@ export default async function handler(req, res) {
       ],
       temperature: 0.7,
     });
-    aiResult = completion.choices[0].message.content;
-  } catch (e) {
-    res.status(500).json({ error: 'OpenAI API 호출 실패', detail: e.message, raw: e.response?.data });
-    return;
-  }
 
-  try {
-    const parsed = JSON.parse(aiResult);
-    res.status(200).json(parsed);
+    aiResult = JSON.parse(completion.choices[0].message.content);
+    
+    // 성공적으로 2단계까지 완료된 경우
+    res.status(200).json({
+      hasEmotion: true,
+      debug: "2단계 책 추천 완료",
+      step1Response: emotionCheck.choices[0].message.content, // 1단계 응답 포함
+      ...aiResult
+    });
   } catch (e) {
-    res.status(500).json({ error: 'AI 응답 파싱 실패', detail: e.message, raw: aiResult });
+    console.log('책 추천 에러:', e.message);
+    res.status(500).json({ 
+      error: '책 추천 실패', 
+      detail: e.message,
+      step1Response: emotionCheck.choices[0].message.content // 에러 시에도 1단계 응답 포함
+    });
   }
 }
