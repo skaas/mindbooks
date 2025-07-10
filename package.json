@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.4",
     "context7": "^1.0.3",
     "openai": "^4.x.x",
     "openai-edge": "^1.2.2",

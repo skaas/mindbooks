@@ -1,12 +1,14 @@
 import React from 'react';
-import RecommendForm from './components/RecommendForm';
+import RecommendForm from './components/RecommendForm'
 
 function App() {
   return (
-    <div className="bg-gray-100 min-h-screen flex items-center justify-center p-4">
-      <RecommendForm />
+    <div className="flex justify-center items-start min-h-screen pt-20">
+      <main>
+        <RecommendForm />
+      </main>
     </div>
-  );
+  )
 }
 
-export default App; 
+export default App 

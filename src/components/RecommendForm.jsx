@@ -1,16 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, Fragment, useEffect } from 'react';
+import { Transition } from '@headlessui/react';
 
 export default function RecommendForm() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [noEmotionMessage, setNoEmotionMessage] = useState('');
+  const [submittedText, setSubmittedText] = useState('');
+
+  const [showH1, setShowH1] = useState(false);
+  const [showP1, setShowP1] = useState(false);
+  const [showP2, setShowP2] = useState(false);
+  const [animationsFinished, setAnimationsFinished] = useState(false);
+  const [typedPlaceholder, setTypedPlaceholder] = useState('');
+
+  const showForm = !loading && !result && !noEmotionMessage;
+
+  useEffect(() => {
+    if (showForm) {
+      // 컴포넌트가 마운트된 후 애니메이션을 트리거하기 위해 짧은 지연을 줍니다.
+      const animationStartTimer = setTimeout(() => {
+        setShowH1(true);
+        setShowP1(true);
+        setShowP2(true);
+      }, 50);
+
+      // 애니메이션이 끝나는 시점에 placeholder 텍스트를 보여주기 위한 타이머
+      const animationFinishTimer = setTimeout(() => {
+        setAnimationsFinished(true);
+      }, 1550); // 총 애니메이션 시간 1500ms + 초기 지연 50ms
+
+      return () => {
+        clearTimeout(animationStartTimer);
+        clearTimeout(animationFinishTimer);
+      };
+    } else {
+      setShowH1(false);
+      setShowP1(false);
+      setShowP2(false);
+      setAnimationsFinished(false); // 폼이 사라질 때 상태 초기화
+      setTypedPlaceholder(''); // 폼이 사라질 때 상태 초기화
+    }
+  }, [showForm]);
+
+  useEffect(() => {
+    if (animationsFinished) {
+      const targetText = "마스터가 당신의 고민을 기다립니다.";
+      let index = 0;
+      setTypedPlaceholder(''); // 타이핑 시작 전 초기화
+      const intervalId = setInterval(() => {
+        if (index < targetText.length) {
+          setTypedPlaceholder((prev) => prev + targetText.charAt(index));
+          index++;
+        } else {
+          clearInterval(intervalId);
+        }
+      }, 100); // 타이핑 속도 (ms)
+
+      return () => clearInterval(intervalId); // 컴포넌트 언마운트 시 인터벌 정리
+    }
+  }, [animationsFinished]);
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!input.trim()) return;
+    
     setLoading(true);
     setResult(null);
     setNoEmotionMessage('');
+    setSubmittedText(input);
+
     try {
       const res = await fetch('/api/recommend', {
         method: 'POST',
@@ -19,89 +79,127 @@ export default function RecommendForm() {
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        alert('AI 서버에서 오류가 발생했습니다.');
-        setLoading(false);
-        return;
+        throw new Error('AI 서버에서 오류가 발생했습니다.');
       }
 
       const data = await res.json();
       
       if (data.hasEmotion === false) {
         setNoEmotionMessage(data.message);
-        setLoading(false);
-        return;
+      } else {
+        setResult({
+          books: (data["실제 존재하는 추천 도서 목록"] || []).map(book => ({
+            title: book["제목"],
+            author: book["작가"],
+            summary: book["한 줄 요약"],
+            reason: book["추천 이유"],
+          })),
+        });
       }
-
-      // 서버 응답 키에 맞게 파싱
-      setResult({
-        emotionKeywords: data["감정 키워드"] || [],
-        conceptKeywords: data["인식/개념 키워드"] || [],
-        books: (data["실제 존재하는 추천 도서 목록"] || []).map(book => ({
-          title: book["제목"],
-          author: book["작가"],
-          summary: book["한 줄 요약"],
-          reason: book["추천 이유"],
-        })),
-      });
     } catch (e) {
-      alert('AI 서버와 통신에 실패했습니다.');
+      setNoEmotionMessage('책을 추천받지 못했습니다. 잠시 후 다시 시도해 주세요.');
     }
     setLoading(false);
+    setInput('');
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl mx-auto bg-white rounded-2xl shadow-lg p-6 md:p-10 mt-10">
-      <h1 className="text-4xl md:text-5xl font-bold text-gray-800 text-center mb-2">문장 약국 💊</h1>
-      <p className="text-gray-500 text-center mb-6">당신의 문장에 마음을 처방해 드립니다.</p>
-      <textarea
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        placeholder="요즘 어떤 마음이신가요? 문장을 남겨주세요.\n예: 사람들이 다 나를 좋은 사람이라는데, 왜 나는 혼자일까?"
-        className="w-full h-28 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition resize-none"
-      />
-      <button type="submit" disabled={loading} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105">
-        {loading ? '처방 중...' : '마음 처방받기'}
-      </button>
-      {loading && <div className="flex justify-center my-8"><div className="w-12 h-12 border-4 border-gray-200 rounded-full border-t-blue-500 animate-spin"></div></div>}
-      {noEmotionMessage && (
-        <div className="mt-6 text-center text-red-500 bg-red-100 border border-red-400 p-4 rounded-lg">
-          {noEmotionMessage}
+    <div className="w-full max-w-2xl text-center">
+      <Transition
+        as={Fragment}
+        show={showForm}
+        enter="transition-opacity duration-700"
+        enterFrom="opacity-0"
+        enterTo="opacity-100"
+        leave="transition-opacity duration-300"
+        leaveFrom="opacity-100"
+        leaveTo="opacity-0"
+      >
+        <div className="w-[600px] text-center">
+          <header className="mb-12 flex h-28 flex-col justify-center">
+            <h1
+              className={`text-5xl font-serif mb-2 transition-colors duration-[1500ms] delay-[0ms] ${
+                showH1 ? 'text-muk-text' : 'text-muk-bg'
+              }`}
+            >
+              黙
+            </h1>
+            <p
+              className={`text-lg mb-4 transition-colors duration-[1200ms] delay-[300ms] ${
+                showP1 ? 'text-muk-subtext' : 'text-muk-bg'
+              }`}
+            >
+              말 없는 책방
+            </p>
+            <p
+              className={`transition-colors duration-[1000ms] delay-[500ms] ${
+                showP2 ? 'text-muk-text' : 'text-muk-bg'
+              }`}
+            >
+              당신의 한 문장에, 책으로 대답합니다.
+            </p>
+          </header>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="h-28 flex items-center justify-center border border-muk-border rounded-lg focus-within:border-muk-point transition-colors duration-300">
+              <textarea
+                autoFocus
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                placeholder={typedPlaceholder}
+                className="w-full h-full p-4 bg-transparent text-center text-lg text-muk-text placeholder:text-muk-subtext placeholder:text-center focus:outline-none resize-none caret-muk-point"
+              />
+            </div>
+            <button 
+              type="submit" 
+              disabled={loading} 
+              className="px-8 py-3 text-muk-subtext hover:text-muk-point disabled:text-gray-300 transition-colors duration-300"
+            >
+              책을 받아봅니다
+            </button>
+          </form>
+        </div>
+      </Transition>
+
+      {loading && (
+        <div className="w-full text-center text-muk-subtext">
+          <p>당신의 문장을 읽고 있습니다...</p>
         </div>
       )}
-      {result && (
-        <div className="mt-10">
-          <div className="bg-gray-50 rounded-lg p-6 mb-8">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">AI 마음 분석 결과</h3>
-            <div className="mb-3">
-              <strong className="text-gray-600">감정 키워드:</strong>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {(result.emotionKeywords || []).map((kw, i) => <span key={i} className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">{kw}</span>)}
-              </div>
+
+      <Transition
+        as={Fragment}
+        show={!loading && (!!result || !!noEmotionMessage)}
+        enter="transition-opacity duration-700 delay-300"
+        enterFrom="opacity-0"
+        enterTo="opacity-100"
+        leave="transition-opacity duration-300"
+        leaveFrom="opacity-100"
+        leaveTo="opacity-0"
+      >
+        <div className="w-full">
+          <p className="text-lg text-muk-text mb-12 italic">“{submittedText}”</p>
+          
+          {noEmotionMessage && (
+            <div className="text-muk-subtext">
+              <p>{noEmotionMessage}</p>
             </div>
-            <div>
-              <strong className="text-gray-600">개념 키워드:</strong>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {(result.conceptKeywords || []).map((kw, i) => <span key={i} className="bg-green-100 text-green-800 text-sm font-medium px-3 py-1 rounded-full">{kw}</span>)}
-              </div>
-            </div>
-          </div>
-          <h3 className="text-2xl font-bold text-gray-800 mb-4 mt-12 text-center">마음 처방 서재</h3>
-          {(result.books || []).map((book, i) => (
-            <div key={i} className="flex flex-col md:flex-row gap-6 bg-white border border-gray-200 rounded-lg p-6 mb-4 transform hover:shadow-md transition-shadow">
-              <img src={`https://placehold.co/120x170/E2E8F0/334155?text=${encodeURIComponent(book.title)}`} alt={`${book.title} 책 표지`} className="w-24 h-36 md:w-32 md:h-48 object-cover rounded-md mx-auto md:mx-0 flex-shrink-0" />
-              <div className="flex-grow">
-                <h4 className="text-xl font-bold text-gray-900">{book.title}</h4>
-                <p className="text-md text-gray-500 mb-3">{book.author}</p>
-                <p className="text-gray-700 mb-4 text-sm">{book.summary}</p>
-                <div className="bg-blue-50 border-l-4 border-blue-400 text-blue-900 p-4 rounded-r-lg text-sm">
-                  <strong className="font-bold">추천 이유:</strong> {book.reason}
+          )}
+
+          {result && (
+            <div className="space-y-12">
+              {(result.books || []).map((book, i) => (
+                <div key={i} className="text-left border-t border-muk-border pt-8">
+                  <h3 className="text-2xl font-serif text-muk-text mb-1">{book.title}</h3>
+                  <p className="text-muk-subtext mb-4">{book.author}</p>
+                  <p className="text-muk-text mb-4">{book.summary}</p>
+                  <p className="text-muk-text text-opacity-80">{book.reason}</p>
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
-    </form>
+      </Transition>
+    </div>
   );
 } 
