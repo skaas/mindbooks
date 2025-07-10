@@ -27,12 +27,13 @@ export default async function handler(req, res) {
       messages: [
         {
           role: 'system',
-          content: `사용자가 쓴 글에서 진정한 감정이나 고민이 있는지 매우 엄격하게 분석합니다.
+          content: `사용자가 쓴 글에서 진정한 감정이나 고민 또는 학습 욕구가 있는지 매우 엄격하게 분석합니다.
 
-다음 경우에만 감정이 있다고 판단:
+다음 경우에만 감정이나 고민 학습욕구가 있다고 판단:
 - 슬픔, 외로움, 우울, 분노, 불안, 스트레스 등 명확한 감정 표현
 - 인생 고민, 관계 문제, 진로 고민 등 구체적인 문제 상황  
 - 깊은 생각이나 철학적 고민
+- 특정한 학문에 대한 질문이나 학습 욕구
 
 다음은 반드시 감정이 없다고 판단:
 - 단순 인사말: "안녕하세요", "반갑습니다", "hello" 등
@@ -40,15 +41,8 @@ export default async function handler(req, res) {
 - 의미 없는 테스트 문장: "테스트", "123", "ㅁㄴㅇㄹ" 등
 - 장난스러운 말, 단순 대화
 
-예시:
-- "안녕하세요" → 감정 없음
-- "반갑습니다" → 감정 없음  
-- "테스트입니다" → 감정 없음
-- "요즘 너무 외로워요" → 감정 있음
-- "진로 때문에 고민이에요" → 감정 있음
-
-1. 감정이 드러나지 않으면: {"hasEmotion": false, "message": "장난으로 글을 쓰지 마세요."}
-2. 진정한 감정이 확인되면: {"hasEmotion": true, "message": "감정이 확인되었습니다."}
+1. 감정이나 학습 욕구가 드러나지 않으면: {"hasEmotion": false, "message": "장난으로 글을 쓰지 마세요."}
+2. 진정한 감정이나 학습 욕구가 확인되면: {"hasEmotion": true, "message": "확인되었습니다."}
 
 반드시 위 JSON 형식으로만 응답하세요. 다른 설명은 절대 추가하지 마세요.`
         },
@@ -62,7 +56,7 @@ export default async function handler(req, res) {
     // 에러 발생 시 안전하게 감정 없음으로 처리
     res.status(200).json({ 
       hasEmotion: false, 
-      message: "장난으로 글을 쓰지 마세요.",
+      message: "마스터가 고개를 저으며 당신의 이야기를 무시합니다.",
       rawResponse: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패"
     });
     return;
