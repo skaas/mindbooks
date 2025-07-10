@@ -19,16 +19,24 @@ export default function RecommendForm() {
       // 응답이 200이 아닐 때는 에러 메시지를 텍스트로 받아서 출력
       if (!res.ok) {
         const errorText = await res.text();
-        console.error('API 서버 에러:', errorText);
         alert('AI 서버에서 오류가 발생했습니다.');
         setLoading(false);
         return;
       }
 
       const data = await res.json();
-      setResult(data);
+      // 서버 응답 키에 맞게 파싱
+      setResult({
+        emotionKeywords: data["감정 키워드"] || [],
+        conceptKeywords: data["인식/개념 키워드"] || [],
+        books: (data["실제 존재하는 추천 도서 목록"] || []).map(book => ({
+          title: book["제목"],
+          author: book["작가"],
+          summary: book["한 줄 요약"],
+          reason: book["추천 이유"],
+        })),
+      });
     } catch (e) {
-      console.error('AI 서버 통신 에러:', e);
       alert('AI 서버와 통신에 실패했습니다.');
     }
     setLoading(false);

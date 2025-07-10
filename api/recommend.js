@@ -58,7 +58,7 @@ export default async function handler(req, res) {
         },
         { role: 'user', content: userInput },
       ],
-      temperature: 0.7,
+      temperature: 0.9,
     });
     aiResult = completion.choices[0].message.content;
   } catch (e) {
