@@ -65,21 +65,12 @@ export default function RecommendForm() {
   }, [messages]);
   
   // Timeout countdown timer
-  useEffect(() => {
-    if (isLocked && lockoutTime > 0) {
-      const timer = setTimeout(() => {
-        setLockoutTime(lockoutTime - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else if (lockoutTime === 0) {
-      setIsLocked(false);
-    }
-  }, [isLocked, lockoutTime]);
+  
 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isLocked || loading) return;
+    if (!input.trim() || loading) return;
 
     const userMessage = { id: Date.now(), sender: 'user', content: input };
     const thinkingMessageId = Date.now() + 1;
