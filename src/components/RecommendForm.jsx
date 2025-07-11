@@ -1,6 +1,6 @@
-import React, { useState, Fragment, useEffect, useRef } from 'react';
-import { Transition } from '@headlessui/react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Send, Clock } from 'lucide-react';
+import ChatMessage from './ChatMessage';
 
 export default function RecommendForm() {
   const [input, setInput] = useState('');
@@ -16,21 +16,25 @@ export default function RecommendForm() {
 
   const chatContainerRef = useRef(null);
   const typingIntervalRef = useRef(null);
+  const typingMessageIdRef = useRef('');
+  const typingFullContentRef = useRef('');
 
   useEffect(() => {
-    // This effect runs only once on mount and handles the initial message sequence
     const timers = [];
-    if(typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+    if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
     
     setMessages([]);
     setShowMsg1(false);
     setShowMsg2(false);
 
-    const msg1 = { id: `${Date.now()}-1`, sender: 'master', content: '黙-묵-MUQ', type: 'h1' };
-    const msg2 = { id: `${Date.now()}-2`, sender: 'master', content: '말 없는 책방', type: 'p' };
+    const msg1 = { id: `${Date.now()}-1`, sender: 'system', content: '黙-묵-MUQ', type: 'h1' };
+    const msg2 = { id: `${Date.now()}-2`, sender: 'system', content: '말 없는 책방', type: 'p' };
     const typingMessageId = `${Date.now()}-3`;
-    const typingFullContent = '책방 묵(黙)\n이곳은 슬픔을 위한 조용한 책방입니다.\n이름을 묻거나 기록하지 않습니다.\n마스터는 말없이 책으로만 응답합니다.\n\n\n마스터가 조용히 고개를 끄덕입니다.';
+    const typingFullContent = '책방 묵(黙)\n이곳은 슬픔을 위한 조용한 책방입니다.\n이름을 묻거나 기록하지 않습니다.\n마스터는 말없이 책으로만 응답합니다.\n\n\n어서오세요. 오늘 어떤 힘든일이 있으셨나요?';
     const msg3 = { id: typingMessageId, sender: 'master', content: '', type: 'p' };
+
+    typingMessageIdRef.current = typingMessageId;
+    typingFullContentRef.current = typingFullContent;
 
     setMessages([msg1, msg2, msg3]);
 
@@ -159,7 +163,7 @@ export default function RecommendForm() {
       setMessages(prev => {
         console.log('[handleSubmit] API Error. Prev state:', prev);
         const updatedMessages = prev.filter(msg => msg && msg.id !== thinkingMessageId);
-        const errorMessage = { id: Date.now(), sender: 'master', content: '지금은 마스터가 건강이 좋지 않아보입니다. 잠시 후 다시 시도해 주세요.' };
+        const errorMessage = { id: Date.now(), sender: 'system', content: '지금은 마스터가 건강이 좋지 않아보입니다.\n잠시 후 다시 시도해 주세요.' };
         const nextState = [...updatedMessages, errorMessage].filter(Boolean);
         console.log('[handleSubmit] API Error. Next state:', nextState);
         return nextState;
@@ -177,33 +181,8 @@ export default function RecommendForm() {
       {/* Main Content Area */}
       <main ref={chatContainerRef} className="flex-grow flex flex-col p-4 overflow-y-auto">
         <div className="w-full max-w-2xl mx-auto space-y-4">
-          {messages.filter(Boolean).map((msg, index) => (
-            <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`rounded-lg px-4 py-2 max-w-lg ${msg.sender === 'user' ? 'bg-muk-point text-white' : ''}`}>
-                {(() => {
-                  if (msg.type === 'h1') {
-                    return <h1 className={`text-5xl font-serif text-center mb-2 transition-colors duration-[1500ms] ${showMsg1 ? 'text-muk-text' : 'text-muk-bg'}`}>{msg.content}</h1>;
-                  }
-                  if (msg.type === 'p' && index === 1) { // "말 없는 책방"
-                    return <p className={`text-lg whitespace-pre-wrap text-left transition-colors duration-[1000ms] ${showMsg2 ? 'text-muk-subtext' : 'text-muk-bg'}`}>{msg.content}</p>;
-                  }
-                  if (msg.type === 'p') { // Other 'p' types like typing message
-                    return <p className="text-lg text-muk-subtext whitespace-pre-wrap text-left">{msg.content}</p>;
-                  }
-                  if (msg.type === 'book') {
-                    return (
-                      <div className="text-left border-t border-muk-border/50 pt-4 mt-2 bg-muk-bg-light p-4 rounded-lg">
-                        <h3 className="text-xl font-serif text-muk-text mb-1">{msg.content.title}</h3>
-                        <p className="text-muk-subtext mb-2 text-sm">{msg.content.author}</p>
-                        <p className="text-muk-text/90 mb-3 text-base">{msg.content.summary}</p>
-                        <p className="text-muk-text/70 text-sm">{msg.content.reason}</p>
-                      </div>
-                    );
-                  }
-                  return <p className="whitespace-pre-wrap">{msg.content}</p>;
-                })()}
-              </div>
-            </div>
+          {messages.filter(Boolean).map((msg) => (
+            <ChatMessage key={msg.id} msg={msg} />
           ))}
         </div>
       </main>
