@@ -17,8 +17,6 @@ export default function RecommendForm() {
     if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
     
     setMessages([]);
-    setShowMsg1(false);
-    setShowMsg2(false);
 
     const msg1 = { id: `${Date.now()}-1`, sender: 'system', content: '黙-묵-MUQ', type: 'h1' };
     const msg2 = { id: `${Date.now()}-2`, sender: 'system', content: '말 없는 책방', type: 'p' };
@@ -31,9 +29,6 @@ export default function RecommendForm() {
 
     setMessages([msg1, msg2, msg3]);
 
-    timers.push(setTimeout(() => setShowMsg1(true), 100)); // Start fade-in for msg1
-    timers.push(setTimeout(() => setShowMsg2(true), 2000)); // Start fade-in for msg2
-    
     timers.push(setTimeout(() => {
         typingIntervalRef.current = setInterval(() => {
             setMessages(prev => {
