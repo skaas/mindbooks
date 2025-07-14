@@ -6,6 +6,22 @@ export default async function handler(req, res) {
     return;
   }
 
+  // 환경 변수 체크
+  if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL || !process.env.GOOGLE_SHEETS_PRIVATE_KEY || !process.env.GOOGLE_SHEET_ID) {
+    console.error('환경 변수가 설정되지 않았습니다:', {
+      hasClientEmail: !!process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+      hasPrivateKey: !!process.env.GOOGLE_SHEETS_PRIVATE_KEY,
+      hasSheetId: !!process.env.GOOGLE_SHEET_ID
+    });
+    
+    // 개발 중에는 빈 피드를 반환
+    res.status(200).json({ 
+      feedItems: [],
+      message: '환경 변수가 설정되지 않았습니다. Google Sheets 연동을 위해 환경 변수를 설정해주세요.'
+    });
+    return;
+  }
+
   try {
     const spreadsheetData = await getSheetData();
     
@@ -26,7 +42,7 @@ export default async function handler(req, res) {
             timestamp: new Date().toISOString() // 실제로는 스프레드시트에서 타임스탬프를 가져올 수 있음
           };
         } catch (e) {
-          console.error('피드 아이템 파싱 오류:', e);
+          console.error('피드 아이템 파싱 오류:', e, '원본 데이터:', row[2]);
           return null;
         }
       })
@@ -36,7 +52,11 @@ export default async function handler(req, res) {
     res.status(200).json({ feedItems });
   } catch (e) {
     console.error('피드 데이터 가져오기 오류:', e);
-    res.status(500).json({ error: '피드 데이터를 가져오는 중 오류가 발생했습니다.' });
+    res.status(200).json({ 
+      feedItems: [],
+      error: '피드 데이터를 가져오는 중 오류가 발생했습니다.',
+      detail: e.message
+    });
   }
 }
 

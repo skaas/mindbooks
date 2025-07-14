@@ -14,7 +14,14 @@ export default function RecommendForm() {
       const response = await fetch('/api/feed');
       if (!response.ok) throw new Error('피드 데이터를 불러올 수 없습니다.');
       const data = await response.json();
-      setFeedItems(data.feedItems || []);
+      
+      // 환경 변수가 설정되지 않은 경우 처리
+      if (data.message && data.message.includes('환경 변수')) {
+        setFeedItems([]);
+        console.warn('환경 변수가 설정되지 않았습니다:', data.message);
+      } else {
+        setFeedItems(data.feedItems || []);
+      }
     } catch (error) {
       console.error('피드 데이터 로딩 오류:', error);
       setFeedItems([]);
@@ -74,7 +81,10 @@ export default function RecommendForm() {
         ) : feedItems.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-muk-subtext mb-4">아직 아무도 이야기를 나누지 않았습니다.</p>
-            <p className="text-muk-subtext">첫 번째 방문자가 되어보세요.</p>
+            <p className="text-muk-subtext mb-2">첫 번째 방문자가 되어보세요.</p>
+            <p className="text-muk-subtext text-sm opacity-75">
+              (개발 중: Google Sheets 연동을 위해 환경 변수를 설정해주세요)
+            </p>
           </div>
         ) : (
           <div className="space-y-6">
