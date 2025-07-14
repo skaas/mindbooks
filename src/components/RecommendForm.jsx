@@ -8,16 +8,12 @@ export default function RecommendForm() {
   const [loading, setLoading] = useState(true);
   const [chatModalOpen, setChatModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [debugInfo, setDebugInfo] = useState(null); // 디버깅용 상태 추가
 
   const fetchFeedData = async () => {
     try {
       const response = await fetch('/api/feed');
       if (!response.ok) throw new Error('피드 데이터를 불러올 수 없습니다.');
       const data = await response.json();
-      
-      // 디버깅 정보 저장
-      setDebugInfo(data);
       
       // 환경 변수가 설정되지 않은 경우 처리
       if (data.message && data.message.includes('환경 변수')) {
@@ -29,7 +25,6 @@ export default function RecommendForm() {
     } catch (error) {
       console.error('피드 데이터 로딩 오류:', error);
       setFeedItems([]);
-      setDebugInfo({ error: error.message });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -76,16 +71,6 @@ export default function RecommendForm() {
 
       {/* 메인 피드 영역 */}
       <main className="max-w-2xl mx-auto px-4 py-6">
-        {/* 임시 디버깅 섹션 */}
-        {debugInfo && (
-          <div className="mb-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg text-xs">
-            <h3 className="font-bold mb-2 text-gray-800 dark:text-gray-200">🔍 디버깅 정보 (임시)</h3>
-            <pre className="whitespace-pre-wrap text-gray-700 dark:text-gray-300 overflow-x-auto">
-              {JSON.stringify(debugInfo, null, 2)}
-            </pre>
-          </div>
-        )}
-
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">

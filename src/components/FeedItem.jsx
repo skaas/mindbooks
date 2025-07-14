@@ -1,17 +1,7 @@
 import React from 'react';
-import { Clock, Tag, Book } from 'lucide-react';
+import { Tag, Book } from 'lucide-react';
 
 export default function FeedItem({ item }) {
-  const formatTimeAgo = (timestamp) => {
-    const now = new Date();
-    const time = new Date(timestamp);
-    const diffInMinutes = Math.floor((now - time) / (1000 * 60));
-    
-    if (diffInMinutes < 60) return `${diffInMinutes}분 전`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}시간 전`;
-    return `${Math.floor(diffInMinutes / 1440)}일 전`;
-  };
-
   return (
     <div className="bg-muk-bg/80 border border-muk-border/30 rounded-lg p-6 mb-4 hover:bg-muk-bg/90 transition-colors">
       {/* 헤더 */}
@@ -21,10 +11,6 @@ export default function FeedItem({ item }) {
             <span className="text-muk-point text-sm font-bold">묵</span>
           </div>
           <span className="text-muk-subtext text-sm">익명의 방문자</span>
-        </div>
-        <div className="flex items-center space-x-1 text-muk-subtext text-sm">
-          <Clock size={14} />
-          <span>{formatTimeAgo(item.timestamp)}</span>
         </div>
       </div>
 
