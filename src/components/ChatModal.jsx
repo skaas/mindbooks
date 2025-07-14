@@ -26,7 +26,7 @@ export default function ChatModal({ isOpen, onClose }) {
     const msg1 = { id: `${Date.now()}-1`, sender: 'system', content: '黙-묵-MUQ', type: 'h1' };
     const msg2 = { id: `${Date.now()}-2`, sender: 'system', content: '말 없는 책방', type: 'p' };
     const typingMessageId = `${Date.now()}-3`;
-    const typingFullContent = '책방 묵(黙)\n이곳은 슬픔을 위한 조용한 책방입니다.\n이름을 묻거나 기록하지 않습니다.\n마스터는 말없이 책으로만 응답합니다.\n\n\n어서오세요. 오늘 어떤 힘든일이 있으셨나요?';
+    const typingFullContent = '책방 묵(黙)\n어서오세요. 오늘 어떤 힘든일이 있으셨나요?';
     const msg3 = { id: typingMessageId, sender: 'master', content: '', type: 'p' };
 
     typingMessageIdRef.current = typingMessageId;
