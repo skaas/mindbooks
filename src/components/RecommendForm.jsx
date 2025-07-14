@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
 import FeedItem from './FeedItem';
 import ChatModal from './ChatModal';
@@ -8,36 +8,83 @@ export default function RecommendForm() {
   const [loading, setLoading] = useState(true);
   const [chatModalOpen, setChatModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 3,
+    total: 0,
+    hasMore: true
+  });
 
-  const fetchFeedData = async () => {
+  const fetchFeedData = async (page = 1, append = false) => {
     try {
-      const response = await fetch('/api/feed');
+      if (page === 1) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const response = await fetch(`/api/feed?page=${page}&limit=${pagination.limit}`);
       if (!response.ok) throw new Error('피드 데이터를 불러올 수 없습니다.');
       const data = await response.json();
       
       // 환경 변수가 설정되지 않은 경우 처리
       if (data.message && data.message.includes('환경 변수')) {
         setFeedItems([]);
+        setPagination(prev => ({ ...prev, hasMore: false }));
         console.warn('환경 변수가 설정되지 않았습니다:', data.message);
       } else {
-        setFeedItems(data.feedItems || []);
+        const newItems = data.feedItems || [];
+        
+        if (append) {
+          setFeedItems(prev => [...prev, ...newItems]);
+        } else {
+          setFeedItems(newItems);
+        }
+        
+        setPagination(data.pagination || { page: 1, limit: 3, total: 0, hasMore: false });
       }
     } catch (error) {
       console.error('피드 데이터 로딩 오류:', error);
-      setFeedItems([]);
+      if (!append) {
+        setFeedItems([]);
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
       setRefreshing(false);
     }
   };
+
+  // 무한 스크롤 감지
+  const handleScroll = useCallback(() => {
+    if (loadingMore || !pagination.hasMore) return;
+
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight;
+    const clientHeight = document.documentElement.clientHeight;
+
+    // 스크롤이 하단에서 200px 이내에 도달했을 때 더 불러오기
+    if (scrollTop + clientHeight >= scrollHeight - 200) {
+      const nextPage = pagination.page + 1;
+      console.log('더 불러오기 시작:', { currentPage: pagination.page, nextPage });
+      fetchFeedData(nextPage, true);
+    }
+  }, [loadingMore, pagination.hasMore, pagination.page, pagination.limit]);
 
   useEffect(() => {
     fetchFeedData();
   }, []);
 
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
   const handleRefresh = () => {
     setRefreshing(true);
-    fetchFeedData();
+    setPagination(prev => ({ ...prev, page: 1, hasMore: true }));
+    fetchFeedData(1, false);
   };
 
   const openChatModal = () => {
@@ -100,6 +147,23 @@ export default function RecommendForm() {
             {feedItems.map((item) => (
               <FeedItem key={item.id} item={item} />
             ))}
+
+            {/* 더 불러오기 로딩 표시 */}
+            {loadingMore && (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-muk-point mx-auto mb-2"></div>
+                  <p className="text-muk-subtext text-sm">더 많은 이야기를 불러오고 있습니다...</p>
+                </div>
+              </div>
+            )}
+
+            {/* 더 이상 불러올 내용이 없을 때 */}
+            {!pagination.hasMore && feedItems.length > 0 && (
+              <div className="text-center py-8">
+                <p className="text-muk-subtext text-sm">모든 이야기를 확인했습니다.</p>
+              </div>
+            )}
           </div>
         )}
       </main>

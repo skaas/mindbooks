@@ -6,6 +6,13 @@ export default async function handler(req, res) {
     return;
   }
 
+  // 페이지네이션 파라미터 추출
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 3;
+  const offset = (page - 1) * limit;
+
+  console.log('페이지네이션 파라미터:', { page, limit, offset });
+
   // 환경 변수 체크
   console.log('환경 변수 확인:', {
     hasClientEmail: !!process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
@@ -25,6 +32,7 @@ export default async function handler(req, res) {
     // 개발 중에는 빈 피드를 반환
     res.status(200).json({ 
       feedItems: [],
+      pagination: { page, limit, total: 0, hasMore: false },
       message: '환경 변수가 설정되지 않았습니다. Google Sheets 연동을 위해 환경 변수를 설정해주세요.'
     });
     return;
@@ -43,7 +51,7 @@ export default async function handler(req, res) {
     });
     
     // 스프레드시트 데이터를 피드 형태로 변환
-    const feedItems = spreadsheetData
+    const allFeedItems = spreadsheetData
       .filter(row => {
         const hasQuestionAndAnswer = row[1] && row[2];
         if (!hasQuestionAndAnswer) {
@@ -84,20 +92,33 @@ export default async function handler(req, res) {
           return null;
         }
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .reverse(); // 최신순으로 정렬
 
-    console.log('최종 피드 아이템:', {
-      totalItems: feedItems.length,
-      items: feedItems.map(item => ({
-        id: item.id,
-        questionPreview: item.question.substring(0, 50) + '...',
-        emotionKeywords: item.emotionKeywords,
-        conceptKeywords: item.conceptKeywords,
-        booksCount: item.books.length
-      }))
+    // 페이지네이션 적용
+    const total = allFeedItems.length;
+    const paginatedItems = allFeedItems.slice(offset, offset + limit);
+    const hasMore = offset + limit < total;
+
+    console.log('페이지네이션 결과:', {
+      total,
+      page,
+      limit,
+      offset,
+      returnedItems: paginatedItems.length,
+      hasMore
     });
 
-    res.status(200).json({ feedItems: feedItems.reverse() });
+    res.status(200).json({ 
+      feedItems: paginatedItems,
+      pagination: {
+        page,
+        limit,
+        total,
+        hasMore,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
   } catch (e) {
     console.error('피드 데이터 가져오기 오류:', {
       message: e.message,
@@ -106,6 +127,7 @@ export default async function handler(req, res) {
     });
     res.status(200).json({ 
       feedItems: [],
+      pagination: { page, limit, total: 0, hasMore: false },
       error: '피드 데이터를 가져오는 중 오류가 발생했습니다.',
       detail: e.message
     });
