@@ -131,17 +131,42 @@ async function getSheetData() {
     console.log('Google Sheets API 클라이언트 생성...');
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
-    const range = 'Demo!A2:C';
 
-    console.log('스프레드시트 데이터 요청:', {
+    // 먼저 스프레드시트 메타데이터를 가져와서 시트 이름들을 확인
+    console.log('스프레드시트 메타데이터 가져오기...');
+    const spreadsheetInfo = await sheets.spreadsheets.get({
       spreadsheetId,
-      range
     });
 
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range,
-    });
+    const sheetNames = spreadsheetInfo.data.sheets.map(sheet => sheet.properties.title);
+    console.log('사용 가능한 시트 이름들:', sheetNames);
+
+    // 가능한 시트 이름들을 순서대로 시도
+    const possibleSheetNames = ['log', 'Demo', '시트1', 'Sheet1', sheetNames[0]]; // 첫 번째 시트도 시도
+    let range = null;
+    let response = null;
+
+    for (const sheetName of possibleSheetNames) {
+      try {
+        range = `${sheetName}!A2:C`;
+        console.log(`시트 "${sheetName}" 시도 중... (범위: ${range})`);
+        
+        response = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range,
+        });
+        
+        console.log(`시트 "${sheetName}" 성공!`);
+        break;
+      } catch (e) {
+        console.log(`시트 "${sheetName}" 실패:`, e.message);
+        continue;
+      }
+    }
+
+    if (!response) {
+      throw new Error(`사용 가능한 시트를 찾을 수 없습니다. 사용 가능한 시트: ${sheetNames.join(', ')}`);
+    }
 
     console.log('Google Sheets API 응답:', {
       statusCode: response.status,
@@ -149,7 +174,8 @@ async function getSheetData() {
       hasValues: !!response.data.values,
       valuesLength: response.data.values ? response.data.values.length : 0,
       range: response.data.range,
-      majorDimension: response.data.majorDimension
+      majorDimension: response.data.majorDimension,
+      usedSheetName: range
     });
 
     return response.data.values || [];
