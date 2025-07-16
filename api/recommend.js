@@ -6,27 +6,27 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 원본 감정/개념 데이터를 로드합니다.
-let emotions, concepts;
+// 미리 계산된 임베딩 데이터를 로드합니다.
+let emotionEmbeddings, conceptEmbeddings;
 try {
-  const emotionPath = path.join(process.cwd(), 'api', 'emotion.json');
-  const conceptPath = path.join(process.cwd(), 'api', 'concept.json');
-  emotions = JSON.parse(fs.readFileSync(emotionPath, 'utf8'));
-  concepts = JSON.parse(fs.readFileSync(conceptPath, 'utf8'));
-  console.log('원본 감정 데이터 로드 성공:', emotions.length, '개');
-  console.log('원본 개념 데이터 로드 성공:', concepts.length, '개');
+  const emotionPath = path.join(process.cwd(), 'api', 'emotion_embeddings.json');
+  const conceptPath = path.join(process.cwd(), 'api', 'concept_embeddings.json');
+  emotionEmbeddings = JSON.parse(fs.readFileSync(emotionPath, 'utf8'));
+  conceptEmbeddings = JSON.parse(fs.readFileSync(conceptPath, 'utf8'));
+  console.log('사전 계산된 감정 임베딩 로드 성공:', emotionEmbeddings.length, '개');
+  console.log('사전 계산된 개념 임베딩 로드 성공:', conceptEmbeddings.length, '개');
 } catch (e) {
-  console.error('데이터 파일 로드 오류:', e);
-  emotions = [];
-  concepts = [];
+  console.error('임베딩 파일 로드 오류:', e);
+  emotionEmbeddings = [];
+  conceptEmbeddings = [];
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  if (!emotions.length || !concepts.length) {
-    return res.status(500).json({ error: '서버 설정 오류: 데이터 파일을 로드할 수 없습니다.' });
+  if (!emotionEmbeddings.length || !conceptEmbeddings.length) {
+    return res.status(500).json({ error: '서버 설정 오류: 임베딩 데이터를 로드할 수 없습니다.' });
   }
 
   let userInput = '';
@@ -44,12 +44,13 @@ export default async function handler(req, res) {
 
 
 async function handleChatAnalysis(userInput, accumulatedTags, res) {
-  let analysisResult = { selectedTags: { emotions: [], concepts: [] } };
+  let analysisResult = null;
   try {
-    analysisResult = await analyzeTextWithPrompt(userInput);
+    analysisResult = await analyzeWithPrecomputedEmbeddings(userInput);
   } catch (e) {
-    console.error('프롬프트 분석 중 오류 발생:', e);
+    console.error('벡터 분석 중 오류 발생:', e);
     // 분석 실패 시에도 대화는 이어가도록 기본값 설정
+    analysisResult = { selectedTags: { emotions: [], concepts: [] } };
   }
 
   const newEmotionTags = [...new Set([...accumulatedTags.emotions, ...analysisResult.selectedTags.emotions])];
@@ -98,51 +99,28 @@ async function handleChatAnalysis(userInput, accumulatedTags, res) {
   });
 }
 
-async function analyzeTextWithPrompt(userInput) {
-  const emotionLabels = emotions.map(e => e.label);
-  const conceptLabels = concepts.map(c => c.label);
+async function analyzeWithPrecomputedEmbeddings(userInput) {
+  const userEmbedding = await getEmbedding(userInput);
 
-  const prompt = `사용자의 다음 발화 내용을 분석하여, 주어진 감정 및 개념 목록과 얼마나 관련이 있는지 판단해주세요.
-각 항목에 대해 0.0에서 1.0 사이의 점수를 매겨주세요.
-결과는 반드시 JSON 형식으로, 'emotions'와 'concepts'라는 두 개의 키를 가진 객체로 반환해주세요.
-각 키의 값은 [{ "tag": "태그명", "score": 점수 }] 형태의 배열이어야 합니다.
-
-사용자 발화: "${userInput}"
-
-감정 목록: ${JSON.stringify(emotionLabels)}
-개념 목록: ${JSON.stringify(conceptLabels)}
-`;
-
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'system',
-        content: "You are a helpful assistant that analyzes text and returns results in JSON format."
-      },
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.2,
-  });
-
-  const content = JSON.parse(response.choices[0].message.content);
+  const findSimilarItems = (userVec, items) => {
+    return items
+      .map(item => ({
+        label: item.label,
+        similarity: cosineSimilarity(userVec, item.embedding),
+      }))
+      .sort((a, b) => b.similarity - a.similarity);
+  };
   
-  console.log('LLM 분석 결과:', JSON.stringify(content, null, 2));
+  const emotionResults = findSimilarItems(userEmbedding, emotionEmbeddings);
+  const conceptResults = findSimilarItems(userEmbedding, conceptEmbeddings);
 
-  const threshold = 0.5;
-  const selectedEmotions = (content.emotions || [])
-    .filter(item => typeof item.score === 'number' && item.score >= threshold)
-    .map(item => item.tag);
-  
-  const selectedConcepts = (content.concepts || [])
-    .filter(item => typeof item.score === 'number' && item.score >= threshold)
-    .map(item => item.tag);
+  const threshold = 0.9;
+  const selectedEmotions = emotionResults.filter(r => r.similarity >= threshold).map(r => r.label);
+  const selectedConcepts = conceptResults.filter(r => r.similarity >= threshold).map(r => r.label);
 
-  console.log(`선택된 태그 (점수 ${threshold} 이상):`, { emotions: selectedEmotions, concepts: selectedConcepts });
+  console.log('분석 결과(상위 5개 감정):', emotionResults.slice(0, 5));
+  console.log('분석 결과(상위 5개 개념):', conceptResults.slice(0, 5));
+  console.log(`선택된 태그 (유사도 ${threshold} 이상):`, { emotions: selectedEmotions, concepts: selectedConcepts });
 
   return {
     selectedTags: {
@@ -150,4 +128,23 @@ async function analyzeTextWithPrompt(userInput) {
       concepts: selectedConcepts,
     },
   };
+}
+
+async function getEmbedding(text) {
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    throw new Error('임베딩을 생성할 수 없는 입력값입니다.');
+  }
+  const response = await openai.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: text.trim(),
+  });
+  return response.data[0].embedding;
+}
+
+function cosineSimilarity(vecA, vecB) {
+  const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+  const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+  const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+  if (magnitudeA === 0 || magnitudeB === 0) return 0;
+  return dotProduct / (magnitudeA * magnitudeB);
 }
