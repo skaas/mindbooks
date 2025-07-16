@@ -10,12 +10,25 @@ const openai = new OpenAI({
 // JSON 파일을 동적으로 로드
 let emotionData, conceptData;
 try {
-  emotionData = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src/components/emotion.json'), 'utf8'));
-  conceptData = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src/components/concept.json'), 'utf8'));
+  console.log('=== JSON 파일 로드 시작 ===');
+  console.log('현재 작업 디렉토리:', process.cwd());
+  
+  const emotionPath = path.join(process.cwd(), 'src/components/emotion.json');
+  const conceptPath = path.join(process.cwd(), 'src/components/concept.json');
+  
+  console.log('emotion.json 경로:', emotionPath);
+  console.log('concept.json 경로:', conceptPath);
+  
+  emotionData = JSON.parse(fs.readFileSync(emotionPath, 'utf8'));
+  conceptData = JSON.parse(fs.readFileSync(conceptPath, 'utf8'));
+  
   console.log('emotion data 로드됨:', emotionData.length, '개 항목');
   console.log('concept data 로드됨:', conceptData.length, '개 항목');
+  console.log('첫 번째 emotion 항목:', emotionData[0]);
+  console.log('첫 번째 concept 항목:', conceptData[0]);
 } catch (e) {
   console.error('JSON 파일 로드 오류:', e);
+  console.error('오류 스택:', e.stack);
   emotionData = [];
   conceptData = [];
 }
@@ -30,11 +43,25 @@ export default async function handler(req, res) {
   let accumulatedTags = { emotions: [], concepts: [] };
   
   try {
-    const body = req.body.userInput ? req.body : JSON.parse(req.body);
+    console.log('요청 본문 타입:', typeof req.body);
+    console.log('요청 본문 내용:', req.body);
+    
+    // req.body가 이미 객체인 경우와 문자열인 경우를 모두 처리
+    let body;
+    if (typeof req.body === 'string') {
+      body = JSON.parse(req.body);
+    } else {
+      body = req.body;
+    }
+    
     userInput = body.userInput || '';
     accumulatedTags = body.accumulatedTags || { emotions: [], concepts: [] };
-  } catch {
-    res.status(400).json({ error: 'Invalid request body' });
+    
+    console.log('파싱된 userInput:', userInput);
+    console.log('파싱된 accumulatedTags:', accumulatedTags);
+  } catch (error) {
+    console.error('요청 본문 파싱 오류:', error);
+    res.status(400).json({ error: 'Invalid request body', detail: error.message });
     return;
   }
 
@@ -58,13 +85,16 @@ async function handleChatAnalysis(userInput, accumulatedTags, res) {
   let analysisResult = null;
   try {
     console.log('벡터 유사도 분석 시작...');
+    console.log('analyzeEmotionAndConcept 함수 호출 직전');
     analysisResult = await analyzeEmotionAndConcept(userInput);
+    console.log('analyzeEmotionAndConcept 함수 호출 완료');
     console.log('벡터 분석 결과:', {
       emotionTags: analysisResult.selectedTags.emotions,
       conceptTags: analysisResult.selectedTags.concepts
     });
   } catch (e) {
     console.error('벡터 분석 오류:', e);
+    console.error('오류 스택:', e.stack);
   }
 
   // 2단계: 새로운 태그를 누적 태그에 추가 (중복 제거)
@@ -179,47 +209,60 @@ async function getSheetData() {
  * 감정과 개념을 분석하는 함수
  */
 async function analyzeEmotionAndConcept(userInput) {
+  console.log('=== analyzeEmotionAndConcept 함수 시작 ===');
   console.log('감정/개념 분석 시작:', userInput);
 
-  // 사용자 입력의 임베딩 생성
-  const userEmbedding = await getEmbedding(userInput);
-  console.log('사용자 임베딩 생성 완료');
-  
-  // 감정 분석
-  const emotionResults = await analyzeEmotions(userInput, userEmbedding);
-  
-  // 개념 분석
-  const conceptResults = await analyzeConcepts(userInput, userEmbedding);
+  try {
+    // 사용자 입력의 임베딩 생성
+    console.log('getEmbedding 함수 호출 직전');
+    const userEmbedding = await getEmbedding(userInput);
+    console.log('사용자 임베딩 생성 완료, 길이:', userEmbedding.length);
+    
+    // 감정 분석
+    console.log('analyzeEmotions 함수 호출 직전');
+    const emotionResults = await analyzeEmotions(userInput, userEmbedding);
+    console.log('감정 분석 완료, 결과 개수:', emotionResults.length);
+    
+    // 개념 분석
+    console.log('analyzeConcepts 함수 호출 직전');
+    const conceptResults = await analyzeConcepts(userInput, userEmbedding);
+    console.log('개념 분석 완료, 결과 개수:', conceptResults.length);
 
-  // 0.9 이상 유사도를 가진 항목들을 태그로 선택
-  const emotionTags = emotionResults.filter(item => item.similarity >= 0.9);
-  const conceptTags = conceptResults.filter(item => item.similarity >= 0.9);
+    // 0.9 이상 유사도를 가진 항목들을 태그로 선택
+    const emotionTags = emotionResults.filter(item => item.similarity >= 0.9);
+    const conceptTags = conceptResults.filter(item => item.similarity >= 0.9);
 
-  console.log('=== 전체 감정 분석 결과 ===');
-  console.log('상위 10개 감정:', emotionResults.slice(0, 10).map(t => ({ 
-    label: t.label, 
-    similarity: t.similarity.toFixed(4) 
-  })));
-  
-  console.log('=== 전체 컨셉 분석 결과 ===');
-  console.log('상위 10개 컨셉:', conceptResults.slice(0, 10).map(t => ({ 
-    label: t.label, 
-    similarity: t.similarity.toFixed(4) 
-  })));
-  
-  console.log('=== 최종 선택된 태그 (0.9 이상) ===');
-  console.log('선택된 감정 태그:', emotionTags.map(t => ({ label: t.label, similarity: t.similarity.toFixed(4) })));
-  console.log('선택된 컨셉 태그:', conceptTags.map(t => ({ label: t.label, similarity: t.similarity.toFixed(4) })));
+    console.log('=== 전체 감정 분석 결과 ===');
+    console.log('상위 10개 감정:', emotionResults.slice(0, 10).map(t => ({ 
+      label: t.label, 
+      similarity: t.similarity.toFixed(4) 
+    })));
+    
+    console.log('=== 전체 컨셉 분석 결과 ===');
+    console.log('상위 10개 컨셉:', conceptResults.slice(0, 10).map(t => ({ 
+      label: t.label, 
+      similarity: t.similarity.toFixed(4) 
+    })));
+    
+    console.log('=== 최종 선택된 태그 (0.9 이상) ===');
+    console.log('선택된 감정 태그:', emotionTags.map(t => ({ label: t.label, similarity: t.similarity.toFixed(4) })));
+    console.log('선택된 컨셉 태그:', conceptTags.map(t => ({ label: t.label, similarity: t.similarity.toFixed(4) })));
 
-  return {
-    emotions: emotionResults,
-    concepts: conceptResults,
-    selectedTags: {
-      emotions: emotionTags.map(t => t.label),
-      concepts: conceptTags.map(t => t.label)
-    },
-    threshold: 0.9
-  };
+    return {
+      emotions: emotionResults,
+      concepts: conceptResults,
+      selectedTags: {
+        emotions: emotionTags.map(t => t.label),
+        concepts: conceptTags.map(t => t.label)
+      },
+      threshold: 0.9
+    };
+  } catch (error) {
+    console.error('=== analyzeEmotionAndConcept 함수 오류 ===');
+    console.error('오류 메시지:', error.message);
+    console.error('오류 스택:', error.stack);
+    throw error;
+  }
 }
 
 /**
