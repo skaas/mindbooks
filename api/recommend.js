@@ -136,7 +136,7 @@ ${JSON.stringify(conceptLabels, null, 2)}
   
   console.log('LLM 분석 결과:', JSON.stringify(content, null, 2));
 
-  const threshold = 0.5;
+  const threshold = 0.9;
   const selectedEmotions = (content.emotions || [])
     .filter(item => typeof item.score === 'number' && item.score >= threshold)
     .map(item => item.tag);
