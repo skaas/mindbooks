@@ -1,9 +1,24 @@
 import OpenAI from 'openai';
 import { google } from 'googleapis';
+import fs from 'fs';
+import path from 'path';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+// JSON 파일을 동적으로 로드
+let emotionData, conceptData;
+try {
+  emotionData = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src/components/emotion.json'), 'utf8'));
+  conceptData = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src/components/concept.json'), 'utf8'));
+  console.log('emotion data 로드됨:', emotionData.length, '개 항목');
+  console.log('concept data 로드됨:', conceptData.length, '개 항목');
+} catch (e) {
+  console.error('JSON 파일 로드 오류:', e);
+  emotionData = [];
+  conceptData = [];
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -50,26 +65,11 @@ async function handleAnalyzeMode(userInput, accumulatedTags, res) {
   let analysisResult = null;
   try {
     console.log('벡터 유사도 분석 시작...');
-    const analysisResponse = await fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/analyze-emotion`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userInput }),
+    analysisResult = await analyzeEmotionAndConcept(userInput);
+    console.log('벡터 분석 결과:', {
+      emotionTags: analysisResult.selectedTags.emotions,
+      conceptTags: analysisResult.selectedTags.concepts
     });
-    
-    if (analysisResponse.ok) {
-      analysisResult = await analysisResponse.json();
-      console.log('벡터 분석 결과:', {
-        emotionTags: analysisResult.selectedTags.emotions,
-        conceptTags: analysisResult.selectedTags.concepts
-      });
-    } else {
-      const errorText = await analysisResponse.text();
-      console.error('벡터 분석 API 오류:', {
-        status: analysisResponse.status,
-        statusText: analysisResponse.statusText,
-        error: errorText
-      });
-    }
   } catch (e) {
     console.error('벡터 분석 오류:', e);
   }
@@ -263,4 +263,121 @@ async function getSheetData() {
   });
 
   return response.data.values || [];
+}
+
+/**
+ * 감정과 개념을 분석하는 함수
+ */
+async function analyzeEmotionAndConcept(userInput) {
+  console.log('감정/개념 분석 시작:', userInput);
+
+  // 사용자 입력의 임베딩 생성
+  const userEmbedding = await getEmbedding(userInput);
+  console.log('사용자 임베딩 생성 완료');
+  
+  // 감정 분석
+  const emotionResults = await analyzeEmotions(userInput, userEmbedding);
+  
+  // 개념 분석
+  const conceptResults = await analyzeConcepts(userInput, userEmbedding);
+
+  // 0.9 이상 유사도를 가진 항목들을 태그로 선택
+  const emotionTags = emotionResults.filter(item => item.similarity >= 0.9);
+  const conceptTags = conceptResults.filter(item => item.similarity >= 0.9);
+
+  console.log('분석 결과:', {
+    emotionTags: emotionTags.map(t => ({ label: t.label, similarity: t.similarity })),
+    conceptTags: conceptTags.map(t => ({ label: t.label, similarity: t.similarity }))
+  });
+
+  return {
+    emotions: emotionResults,
+    concepts: conceptResults,
+    selectedTags: {
+      emotions: emotionTags.map(t => t.label),
+      concepts: conceptTags.map(t => t.label)
+    },
+    threshold: 0.9
+  };
+}
+
+/**
+ * 텍스트의 임베딩을 생성합니다.
+ */
+async function getEmbedding(text) {
+  const response = await openai.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: text,
+  });
+  return response.data[0].embedding;
+}
+
+/**
+ * 감정 분석을 수행합니다.
+ */
+async function analyzeEmotions(userInput, userEmbedding) {
+  const results = [];
+  
+  for (const emotion of emotionData) {
+    // 감정 라벨, 별칭, 설명을 조합하여 검색 텍스트 생성
+    const searchText = [
+      emotion.label,
+      ...(emotion.aliases || []),
+      emotion.description
+    ].join(' ');
+    
+    const emotionEmbedding = await getEmbedding(searchText);
+    const similarity = cosineSimilarity(userEmbedding, emotionEmbedding);
+    
+    results.push({
+      label: emotion.label,
+      aliases: emotion.aliases || [],
+      description: emotion.description,
+      cluster: emotion.cluster,
+      similarity: similarity
+    });
+  }
+  
+  return results.sort((a, b) => b.similarity - a.similarity);
+}
+
+/**
+ * 개념 분석을 수행합니다.
+ */
+async function analyzeConcepts(userInput, userEmbedding) {
+  const results = [];
+  
+  for (const concept of conceptData) {
+    // 개념 라벨, 별칭, 설명을 조합하여 검색 텍스트 생성
+    const searchText = [
+      concept.label,
+      ...(concept.aliases || []),
+      concept.description
+    ].join(' ');
+    
+    const conceptEmbedding = await getEmbedding(searchText);
+    const similarity = cosineSimilarity(userEmbedding, conceptEmbedding);
+    
+    results.push({
+      label: concept.label,
+      aliases: concept.aliases || [],
+      description: concept.description,
+      cluster: concept.cluster,
+      similarity: similarity
+    });
+  }
+  
+  return results.sort((a, b) => b.similarity - a.similarity);
+}
+
+/**
+ * 코사인 유사도를 계산합니다.
+ */
+function cosineSimilarity(vecA, vecB) {
+  const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+  const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+  const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+  
+  if (magnitudeA === 0 || magnitudeB === 0) return 0;
+  return dotProduct / (magnitudeA * magnitudeB);
 }
