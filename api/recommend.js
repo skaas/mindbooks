@@ -14,9 +14,10 @@ let emotionData, conceptData;
 try {
   console.log('=== JSON 파일 로드 시작 ===');
   
-  // Vercel 환경에서는 __dirname을 사용하여 현재 파일 위치를 기준으로 경로를 잡는 것이 안정적입니다.
-  const emotionPath = path.resolve(__dirname, 'emotion.json');
-  const conceptPath = path.resolve(__dirname, 'concept.json');
+  // Vercel 배포 환경에서는 프로젝트 루트에서부터의 경로로 접근하는 것이 가장 안정적입니다.
+  // process.cwd()는 프로젝트의 루트 디렉토리를 가리킵니다.
+  const emotionPath = path.join(process.cwd(), 'api', 'emotion.json');
+  const conceptPath = path.join(process.cwd(), 'api', 'concept.json');
   
   console.log('emotion.json 절대 경로:', emotionPath);
   console.log('concept.json 절대 경로:', conceptPath);
