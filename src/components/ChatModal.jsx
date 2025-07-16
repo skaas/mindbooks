@@ -80,6 +80,11 @@ export default function ChatModal({ isOpen, onClose }) {
     setLoading(true);
 
     try {
+      console.log('=== API 호출 시작 ===');
+      console.log('사용자 입력:', originalInput);
+      console.log('모드:', 'analyze');
+      console.log('누적 태그:', accumulatedTags);
+      
       const res = await fetch('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,12 +94,17 @@ export default function ChatModal({ isOpen, onClose }) {
           accumulatedTags: accumulatedTags
         }),
       });
+      
+      console.log('API 응답 상태:', res.status, res.statusText);
 
       if (!res.ok) {
+        const errorText = await res.text();
+        console.error('API 오류 응답:', errorText);
         throw new Error('AI 서버에서 오류가 발생했습니다.');
       }
 
       const data = await res.json();
+      console.log('API 응답 데이터:', data);
       
       // 최근 발화의 감정과 컨셉 태그 로그 출력
       console.log('=== 최근 발화 분석 결과 ===');
