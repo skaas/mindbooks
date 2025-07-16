@@ -12,141 +12,219 @@ export default async function handler(req, res) {
   }
 
   let userInput = '';
+  let mode = 'analyze'; // 'analyze' or 'recommend'
+  let accumulatedTags = { emotions: [], concepts: [] };
+  
   try {
-    userInput = req.body.userInput || (typeof req.body === 'string' ? JSON.parse(req.body).userInput : '');
+    const body = req.body.userInput ? req.body : JSON.parse(req.body);
+    userInput = body.userInput || '';
+    mode = body.mode || 'analyze';
+    accumulatedTags = body.accumulatedTags || { emotions: [], concepts: [] };
   } catch {
     res.status(400).json({ error: 'Invalid request body' });
     return;
   }
 
-  // 1단계: gpt-4.1-nano로 감정 분석 (비용 절약)
-  let emotionCheckResult;
-  let emotionCheck; // 스코프 문제 해결을 위해 밖에서 선언
+  console.log('API 호출 모드:', mode, '누적 태그:', accumulatedTags);
+
+  // 분석 모드: 감정/개념 태그 수집
+  if (mode === 'analyze') {
+    return await handleAnalyzeMode(userInput, accumulatedTags, res);
+  }
+  
+  // 추천 모드: 책 추천 생성
+  if (mode === 'recommend') {
+    return await handleRecommendMode(userInput, accumulatedTags, res);
+  }
+
+  res.status(400).json({ error: 'Invalid mode' });
+}
+
+/**
+ * 분석 모드: 감정/개념 태그 수집 및 대화 진행
+ */
+async function handleAnalyzeMode(userInput, accumulatedTags, res) {
+  // 1단계: 벡터 유사도 기반 감정/개념 분석
+  let analysisResult = null;
   try {
-    emotionCheck = await openai.chat.completions.create({
-      model: 'gpt-4.1-nano',
-      messages: [
-        {
-          role: 'system',
-          content: `당신은 말수가 적은 조용한 책방 마스터입니다. 방금 들어온 손님이 무언가 말을 건넸습니다.
-손님의 말투를 억지로 파악하려 하지 않고, 말 속에 담긴 성격만 조용히 느껴봅니다.
-조용한 마스터답게 말없이 받아주는 한 문장을 아래 예시와 비슷하게 대답하며 상대의 감점을 이끌어 낼 수 있는 유도 질문을 같이 합니다.
-
-** 주의사항 **
-단순히 힘들다, 외롭다는 감정은 감정으로 분류하지 않습니다. 왜 힘들었고, 어떤 고민을 하는지 다시 물어봅니다.
-반드시 이래 JSON 형식으로만 응답하세요. 다른 설명은 절대 추가하지 마세요.
-
-{"hasEmotion": true, "message": "고맙습니다. 이제 책을 꺼내보죠."}
-{"hasEmotion": false, "message": "(상황에 맞는 메시지 출력)"}
-
-`
-        },
-        { role: 'user', content: userInput }
-      ],
-      temperature: 0.0, // 더 일관된 결과를 위해 0으로 설정
+    console.log('벡터 유사도 분석 시작...');
+    const analysisResponse = await fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/analyze-emotion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userInput }),
     });
     
-    emotionCheckResult = JSON.parse(emotionCheck.choices[0].message.content);
-  } catch (e) {
-    // 에러 발생 시 안전하게 감정 없음으로 처리
-    res.status(200).json({ 
-      hasEmotion: false, 
-      message: "마스터가 고개를 저으며 당신의 이야기를 무시합니다.",
-      rawResponse: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패"
-    });
-    return;
-  }
-
-  // 감정이 확인되지 않으면 여기서 종료
-  if (!emotionCheckResult.hasEmotion) {
-    res.status(200).json({
-      hasEmotion: false,
-      message: emotionCheckResult.message,
-      rawResponse: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패" // 1단계에서 받은 원본 메시지
-    });
-    return;
-  }
-
-  // 2-1단계: 스프레드시트에서 사전 정의된 답변 찾아보기
-  try {
-    const spreadsheetData = await getSheetData();
-    // 'Q' 컬럼(인덱스 1)이 userInput과 일치하는 행을 찾습니다.
-    const matchedRow = spreadsheetData.find(row => row[1] && row[1].trim() === userInput.trim());
-
-    if (matchedRow && matchedRow[2]) { // 'A' 컬럼(인덱스 2)에 데이터가 있는지 확인
-      const sheetResult = JSON.parse(matchedRow[2]);
-      res.status(200).json({
-        hasEmotion: true,
-        step1Response: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패",
-        fromSheet: true, // 답변 출처가 스프레드시트임을 명시
-        ...sheetResult
+    if (analysisResponse.ok) {
+      analysisResult = await analysisResponse.json();
+      console.log('벡터 분석 결과:', {
+        emotionTags: analysisResult.selectedTags.emotions,
+        conceptTags: analysisResult.selectedTags.concepts
       });
-      return; // 스프레드시트에서 답변을 찾았으므로 여기서 종료
     }
   } catch (e) {
-    console.error('스프레드시트 처리 중 오류 발생:', e);
-    // 스프레드시트 오류가 발생해도 GPT 추천으로 넘어갈 수 있도록 계속 진행합니다.
+    console.error('벡터 분석 오류:', e);
   }
 
+  // 2단계: 새로운 태그를 누적 태그에 추가 (중복 제거)
+  let newEmotionTags = [...accumulatedTags.emotions];
+  let newConceptTags = [...accumulatedTags.concepts];
 
-  // 2-2단계: gpt-4o로 책 추천 (스프레드시트에서 답변을 찾지 못한 경우)
-  let aiResult;
+  if (analysisResult) {
+    // 새로운 감정 태그 추가
+    analysisResult.selectedTags.emotions.forEach(emotion => {
+      if (!newEmotionTags.includes(emotion)) {
+        newEmotionTags.push(emotion);
+      }
+    });
+
+    // 새로운 개념 태그 추가  
+    analysisResult.selectedTags.concepts.forEach(concept => {
+      if (!newConceptTags.includes(concept)) {
+        newConceptTags.push(concept);
+      }
+    });
+  }
+
+  const updatedTags = {
+    emotions: newEmotionTags,
+    concepts: newConceptTags
+  };
+
+  console.log('업데이트된 태그:', updatedTags);
+
+  // 3단계: 마스터의 응답 생성
+  let masterResponse = '';
+  const hasEmotion = updatedTags.emotions.length > 0;
+  const hasConcept = updatedTags.concepts.length > 0;
+  const canRecommend = hasEmotion && hasConcept;
+
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: `당신은 감정과 개념을 분석하여 책을 추천하는 북 큐레이터입니다.
-사용자가 남긴 짧은 문장을 분석해 주세요.
+          content: `당신은 조용한 책방의 마스터입니다. 손님과 대화하며 감정과 고민의 본질을 파악하려고 합니다.
 
-형식에 맞춰 응답하십시오:
-1. 감정 키워드 (2~3개): 사용자가 느끼는 감정을 한두 단어로 정리
-2. 인식/개념 키워드 (1~2개): 핵심 개념 (예: 확증편향, 세대 단절 등)
-3. 실제 존재하는 추천 도서 목록 (3~5권):
-  - 제목 (정확한 한글 번역명)
-  - 작가 (한국어 표기)
-  - 한 줄 요약
-  - 추천 이유
+현재 상황:
+- 감지된 감정: ${updatedTags.emotions.join(', ') || '없음'}
+- 감지된 개념: ${updatedTags.concepts.join(', ') || '없음'}
+- 책 추천 가능 여부: ${canRecommend ? '가능' : '불가능 (감정과 개념이 모두 필요)'}
 
-**주의사항:**
-- 실제 존재하는 책만 추천
-- 가상의 책 생성 금지
-- 결과는 반드시 올바른 JSON만 반환
-
-예시:
-{
-  "감정 키워드": ["외로움", "고독"],
-  "인식/개념 키워드": ["소외"],
-  "실제 존재하는 추천 도서 목록": [
-    {
-      "제목": "외로움에 대하여",
-      "작가": "인그리드 릴레",
-      "한 줄 요약": "외로움의 본질을 탐구하는 인문학적 에세이",
-      "추천 이유": "이 책은 외로움이라는 감정을 깊이 있게 다루며, 외로움이 인간에게 미치는 영향에 대해 고찰합니다."
-    }
-  ]
-}
-`
+지침:
+1. 감정과 개념이 모두 감지되면 "이제 책을 추천해드릴 준비가 되었습니다"라고 말하세요.
+2. 감정만 있으면 구체적인 상황이나 고민을 더 물어보세요.
+3. 개념만 있으면 그때의 감정을 더 자세히 물어보세요.
+4. 둘 다 없으면 좀 더 구체적인 이야기를 유도하세요.
+5. 항상 따뜻하고 이해하는 톤으로 대화하세요.
+6. 50자 이내로 간결하게 답변하세요.`
         },
         { role: 'user', content: userInput }
       ],
       temperature: 0.7,
+      max_tokens: 150
     });
 
-    aiResult = JSON.parse(completion.choices[0].message.content);
+    masterResponse = completion.choices[0].message.content;
+  } catch (e) {
+    console.error('마스터 응답 생성 오류:', e);
+    masterResponse = "잠시 생각을 정리하고 있습니다...";
+  }
+
+  res.status(200).json({
+    mode: 'analyze',
+    message: masterResponse,
+    accumulatedTags: updatedTags,
+    newTags: analysisResult ? {
+      emotions: analysisResult.selectedTags.emotions,
+      concepts: analysisResult.selectedTags.concepts
+    } : { emotions: [], concepts: [] },
+    canRecommend: canRecommend,
+    hasEmotion: hasEmotion,
+    hasConcept: hasConcept
+  });
+}
+
+/**
+ * 추천 모드: 수집된 태그를 바탕으로 책 추천
+ */
+async function handleRecommendMode(userInput, accumulatedTags, res) {
+  // 감정과 개념이 모두 있는지 확인
+  if (accumulatedTags.emotions.length === 0 || accumulatedTags.concepts.length === 0) {
+    res.status(400).json({ 
+      error: '감정과 개념 태그가 모두 필요합니다.',
+      accumulatedTags 
+    });
+    return;
+  }
+
+  try {
+    // 스프레드시트에서 사전 정의된 답변 찾아보기
+    const spreadsheetData = await getSheetData();
+    const matchedRow = spreadsheetData.find(row => row[1] && row[1].trim() === userInput.trim());
+
+    if (matchedRow && matchedRow[2]) {
+      const sheetResult = JSON.parse(matchedRow[2]);
+      res.status(200).json({
+        mode: 'recommend',
+        fromSheet: true,
+        accumulatedTags: accumulatedTags,
+        ...sheetResult
+      });
+      return;
+    }
+
+    // GPT를 사용한 책 추천
+    const enhancedPrompt = `당신은 감정과 개념을 분석하여 책을 추천하는 북 큐레이터입니다.
+
+** 분석된 태그 **
+감정 태그: ${accumulatedTags.emotions.join(', ')}
+개념 태그: ${accumulatedTags.concepts.join(', ')}
+
+위 태그들을 바탕으로 정확한 책 추천을 해주세요.
+
+형식에 맞춰 응답하십시오:
+{
+  "감정 키워드": ${JSON.stringify(accumulatedTags.emotions)},
+  "인식/개념 키워드": ${JSON.stringify(accumulatedTags.concepts)},
+  "실제 존재하는 추천 도서 목록": [
+    {
+      "제목": "책 제목",
+      "작가": "작가명",
+      "한 줄 요약": "요약",
+      "추천 이유": "추천 이유"
+    }
+  ]
+}
+
+**주의사항:**
+- 실제 존재하는 책만 추천
+- 가상의 책 생성 금지
+- 분석된 태그와 관련성이 높은 책을 추천`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: enhancedPrompt },
+        { role: 'user', content: `다음 태그들에 맞는 책을 추천해주세요: ${[...accumulatedTags.emotions, ...accumulatedTags.concepts].join(', ')}` }
+      ],
+      temperature: 0.7,
+    });
+
+    const aiResult = JSON.parse(completion.choices[0].message.content);
     
-    // 성공적으로 2단계까지 완료된 경우
     res.status(200).json({
-      hasEmotion: true,
-      step1Response: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패", // 1단계 응답 포함
+      mode: 'recommend',
+      accumulatedTags: accumulatedTags,
       ...aiResult
     });
+
   } catch (e) {
+    console.error('책 추천 오류:', e);
     res.status(500).json({ 
       error: '책 추천 실패', 
       detail: e.message,
-      step1Response: emotionCheck ? emotionCheck.choices[0]?.message?.content : "API 호출 실패" // 에러 시에도 1단계 응답 포함
+      accumulatedTags: accumulatedTags
     });
   }
 }

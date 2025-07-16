@@ -37,6 +37,31 @@ const ChatMessage = ({ msg }) => {
 
   const textAlignment = msg.sender === 'system' ? 'text-center' : 'text-left';
 
+  // 태그 메시지 렌더링
+  if (msg.type === 'tags') {
+    return (
+      <div className="mb-4 flex justify-center">
+        <div className="bg-muk-point/10 border border-muk-point/30 rounded-lg px-4 py-2 max-w-md">
+          <p className="text-muk-text text-sm whitespace-pre-line text-center">
+            {msg.content}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 책 추천 메시지 렌더링
+  if (msg.type === 'book') {
+    return (
+      <div className="border-t border-muk-border/50 pt-4 mt-2">
+        <h3 className="text-xl font-serif mb-1">{msg.content.title}</h3>
+        <p className="text-muk-subtext mb-2 text-sm">{msg.content.author}</p>
+        <p className="text-muk-text/90 mb-3 text-base">{msg.content.summary}</p>
+        <p className="text-muk-text/70 text-sm">{msg.content.reason}</p>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex w-full ${alignment}`}>
       <div className={`rounded-lg px-4 py-2 max-w-lg ${bubbleStyle} ${textAlignment}`}>
