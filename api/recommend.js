@@ -7,33 +7,44 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+console.log('OpenAI API Key 로드 확인:', process.env.OPENAI_API_KEY ? '성공' : '실패');
+
 // JSON 파일을 동적으로 로드
 let emotionData, conceptData;
 try {
   console.log('=== JSON 파일 로드 시작 ===');
-  console.log('현재 작업 디렉토리:', process.cwd());
   
-  const emotionPath = path.join(process.cwd(), 'src/components/emotion.json');
-  const conceptPath = path.join(process.cwd(), 'src/components/concept.json');
+  const emotionPath = path.resolve(process.cwd(), 'src/components/emotion.json');
+  const conceptPath = path.resolve(process.cwd(), 'src/components/concept.json');
   
-  console.log('emotion.json 경로:', emotionPath);
-  console.log('concept.json 경로:', conceptPath);
+  console.log('emotion.json 절대 경로:', emotionPath);
+  console.log('concept.json 절대 경로:', conceptPath);
+
+  if (!fs.existsSync(emotionPath)) {
+    throw new Error(`emotion.json 파일을 찾을 수 없습니다: ${emotionPath}`);
+  }
+  if (!fs.existsSync(conceptPath)) {
+    throw new Error(`concept.json 파일을 찾을 수 없습니다: ${conceptPath}`);
+  }
   
   emotionData = JSON.parse(fs.readFileSync(emotionPath, 'utf8'));
   conceptData = JSON.parse(fs.readFileSync(conceptPath, 'utf8'));
   
   console.log('emotion data 로드됨:', emotionData.length, '개 항목');
   console.log('concept data 로드됨:', conceptData.length, '개 항목');
-  console.log('첫 번째 emotion 항목:', emotionData[0]);
-  console.log('첫 번째 concept 항목:', conceptData[0]);
 } catch (e) {
-  console.error('JSON 파일 로드 오류:', e);
-  console.error('오류 스택:', e.stack);
+  console.error('JSON 파일 로드 중 심각한 오류 발생:', e);
   emotionData = [];
   conceptData = [];
 }
 
 export default async function handler(req, res) {
+  // 핸들러 함수 시작 전 데이터 로드 확인
+  if (!emotionData.length || !conceptData.length) {
+    console.error('감정/개념 데이터가 로드되지 않아 API를 실행할 수 없습니다.');
+    return res.status(500).json({ error: '서버 설정 오류: 데이터 파일을 로드할 수 없습니다.' });
+  }
+
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
@@ -269,11 +280,27 @@ async function analyzeEmotionAndConcept(userInput) {
  * 텍스트의 임베딩을 생성합니다.
  */
 async function getEmbedding(text) {
-  const response = await openai.embeddings.create({
-    model: 'text-embedding-3-small',
-    input: text,
-  });
-  return response.data[0].embedding;
+  // 입력값 유효성 검사
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    console.error('getEmbedding 오류: 유효하지 않은 입력 텍스트입니다.', text);
+    throw new Error('임베딩을 생성할 수 없는 입력값입니다.');
+  }
+
+  try {
+    const response = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: text.trim(), // 앞뒤 공백 제거
+    });
+    // 임베딩 결과가 비어있는지 확인
+    if (!response.data || !response.data[0] || !response.data[0].embedding) {
+      throw new Error('OpenAI API가 유효한 임베딩을 반환하지 않았습니다.');
+    }
+    return response.data[0].embedding;
+  } catch (error) {
+    console.error(`getEmbedding 함수에서 오류 발생 (입력: "${text}"):`, error);
+    // 오류를 다시 던져서 상위 호출자(analyzeEmotionAndConcept)가 처리하도록 함
+    throw error;
+  }
 }
 
 /**
