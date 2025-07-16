@@ -42,6 +42,7 @@ export default async function handler(req, res) {
   console.log('사용자 입력:', userInput);
 
   // 채팅 분석 처리
+  console.log('handleChatAnalysis 호출 직전');
   return await handleChatAnalysis(userInput, accumulatedTags, res);
 }
 
@@ -49,6 +50,10 @@ export default async function handler(req, res) {
  * 채팅 분석: 감정/개념 태그 수집 및 대화 진행
  */
 async function handleChatAnalysis(userInput, accumulatedTags, res) {
+  console.log('=== handleChatAnalysis 함수 시작 ===');
+  console.log('userInput:', userInput);
+  console.log('accumulatedTags:', accumulatedTags);
+  
   // 1단계: 벡터 유사도 기반 감정/개념 분석
   let analysisResult = null;
   try {
