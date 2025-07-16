@@ -13,10 +13,7 @@ try {
   const conceptPath = path.join(process.cwd(), 'api', 'concept_embeddings.json');
   emotionEmbeddings = JSON.parse(fs.readFileSync(emotionPath, 'utf8'));
   conceptEmbeddings = JSON.parse(fs.readFileSync(conceptPath, 'utf8'));
-  console.log('사전 계산된 감정 임베딩 로드 성공:', emotionEmbeddings.length, '개');
-  console.log('사전 계산된 개념 임베딩 로드 성공:', conceptEmbeddings.length, '개');
 } catch (e) {
-  console.error('임베딩 파일 로드 오류:', e);
   emotionEmbeddings = [];
   conceptEmbeddings = [];
 }
@@ -48,8 +45,7 @@ async function handleChatAnalysis(userInput, accumulatedTags, res) {
   try {
     analysisResult = await analyzeWithPrecomputedEmbeddings(userInput);
   } catch (e) {
-    console.error('벡터 분석 중 오류 발생:', e);
-    // 분석 실패 시에도 대화는 이어가도록 기본값 설정
+    // 벡터 분석 실패 시에도 대화는 이어가도록 기본값 설정
     analysisResult = { selectedTags: { emotions: [], concepts: [] } };
   }
 
@@ -85,7 +81,6 @@ async function handleChatAnalysis(userInput, accumulatedTags, res) {
     });
     masterResponse = completion.choices[0].message.content;
   } catch (e) {
-    console.error('마스터 응답 생성 오류:', e);
     masterResponse = "잠시 생각을 정리하고 있습니다...";
   }
 
@@ -114,13 +109,11 @@ async function analyzeWithPrecomputedEmbeddings(userInput) {
   const emotionResults = findSimilarItems(userEmbedding, emotionEmbeddings);
   const conceptResults = findSimilarItems(userEmbedding, conceptEmbeddings);
 
+  console.log('사용자 발화 유사도 검색 결과:', { emotions: emotionResults.slice(0, 5), concepts: conceptResults.slice(0, 5) });
+
   const threshold = 0.9;
   const selectedEmotions = emotionResults.filter(r => r.similarity >= threshold).map(r => r.label);
   const selectedConcepts = conceptResults.filter(r => r.similarity >= threshold).map(r => r.label);
-
-  console.log('분석 결과(상위 5개 감정):', emotionResults.slice(0, 5));
-  console.log('분석 결과(상위 5개 개념):', conceptResults.slice(0, 5));
-  console.log(`선택된 태그 (유사도 ${threshold} 이상):`, { emotions: selectedEmotions, concepts: selectedConcepts });
 
   return {
     selectedTags: {
