@@ -90,7 +90,6 @@ export default function ChatModal({ isOpen, onClose }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           userInput: originalInput,
-          mode: 'analyze',
           accumulatedTags: accumulatedTags
         }),
       });
@@ -167,12 +166,10 @@ export default function ChatModal({ isOpen, onClose }) {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/recommend', {
+      const res = await fetch('/api/book-recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          userInput: '책 추천 요청',
-          mode: 'recommend',
           accumulatedTags: accumulatedTags
         }),
       });
