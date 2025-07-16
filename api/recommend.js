@@ -26,9 +26,11 @@ export default async function handler(req, res) {
   }
 
   console.log('API 호출 모드:', mode, '누적 태그:', accumulatedTags);
+  console.log('사용자 입력:', userInput);
 
   // 분석 모드: 감정/개념 태그 수집
   if (mode === 'analyze') {
+    console.log('분석 모드로 handleAnalyzeMode 호출');
     return await handleAnalyzeMode(userInput, accumulatedTags, res);
   }
   
