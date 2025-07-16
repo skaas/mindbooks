@@ -96,8 +96,18 @@ export default function ChatModal({ isOpen, onClose }) {
 
       const data = await res.json();
       
+      // 최근 발화의 감정과 컨셉 태그 로그 출력
+      console.log('=== 최근 발화 분석 결과 ===');
+      console.log('새로 감지된 감정 태그:', data.newTags?.emotions || []);
+      console.log('새로 감지된 컨셉 태그:', data.newTags?.concepts || []);
+      
       // 누적 태그 업데이트
       setAccumulatedTags(data.accumulatedTags || { emotions: [], concepts: [] });
+      
+      // 현재 누적된 태그들 로그 출력
+      console.log('=== 현재 누적된 태그들 ===');
+      console.log('누적된 감정 태그:', data.accumulatedTags?.emotions || []);
+      console.log('누적된 컨셉 태그:', data.accumulatedTags?.concepts || []);
 
       setMessages(prev => {
         const updatedMessages = prev.filter(msg => msg && msg.id !== thinkingMessageId);
