@@ -285,10 +285,21 @@ async function analyzeEmotionAndConcept(userInput) {
   const emotionTags = emotionResults.filter(item => item.similarity >= 0.9);
   const conceptTags = conceptResults.filter(item => item.similarity >= 0.9);
 
-  console.log('분석 결과:', {
-    emotionTags: emotionTags.map(t => ({ label: t.label, similarity: t.similarity })),
-    conceptTags: conceptTags.map(t => ({ label: t.label, similarity: t.similarity }))
-  });
+  console.log('=== 전체 감정 분석 결과 ===');
+  console.log('상위 10개 감정:', emotionResults.slice(0, 10).map(t => ({ 
+    label: t.label, 
+    similarity: t.similarity.toFixed(4) 
+  })));
+  
+  console.log('=== 전체 컨셉 분석 결과 ===');
+  console.log('상위 10개 컨셉:', conceptResults.slice(0, 10).map(t => ({ 
+    label: t.label, 
+    similarity: t.similarity.toFixed(4) 
+  })));
+  
+  console.log('=== 최종 선택된 태그 (0.9 이상) ===');
+  console.log('선택된 감정 태그:', emotionTags.map(t => ({ label: t.label, similarity: t.similarity.toFixed(4) })));
+  console.log('선택된 컨셉 태그:', conceptTags.map(t => ({ label: t.label, similarity: t.similarity.toFixed(4) })));
 
   return {
     emotions: emotionResults,
