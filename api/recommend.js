@@ -109,7 +109,7 @@ async function analyzeWithPrecomputedEmbeddings(userInput) {
   const emotionResults = findSimilarItems(userEmbedding, emotionEmbeddings);
   const conceptResults = findSimilarItems(userEmbedding, conceptEmbeddings);
 
-  console.log('사용자 발화 유사도 검색 결과:', { emotions: emotionResults.slice(0, 5), concepts: conceptResults.slice(0, 5) });
+  console.log('사용자 발화 유사도 검색 결과:', { emotions: emotionResults, concepts: conceptResults });
 
   const threshold = 0.9;
   const selectedEmotions = emotionResults.filter(r => r.similarity >= threshold).map(r => r.label);

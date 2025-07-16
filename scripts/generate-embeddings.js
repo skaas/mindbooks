@@ -61,7 +61,12 @@ async function generateEmbeddings() {
 
       const embeddings = [];
       for (const item of data) {
-        const textToEmbed = item[file.descriptionKey] || item.label;
+        const textToEmbed = [
+          item.label,
+          item.description,
+          ...(item.example_prompts || [])
+        ].join(' ').trim();
+        
         console.log(`임베딩 생성 중: [${item.label}] -> "${textToEmbed}"`);
         
         const embedding = await getEmbedding(textToEmbed);
