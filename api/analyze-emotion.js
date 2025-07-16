@@ -1,6 +1,10 @@
 import OpenAI from 'openai';
-import emotionData from '../src/components/emotion.json';
-import conceptData from '../src/components/concept.json';
+import fs from 'fs';
+import path from 'path';
+
+// JSON 파일을 동적으로 로드
+const emotionData = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src/components/emotion.json'), 'utf8'));
+const conceptData = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src/components/concept.json'), 'utf8'));
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -27,9 +31,12 @@ export default async function handler(req, res) {
 
   try {
     console.log('감정/개념 분석 시작:', userInput);
+    console.log('emotion data 로드됨:', emotionData.length, '개 항목');
+    console.log('concept data 로드됨:', conceptData.length, '개 항목');
 
     // 사용자 입력의 임베딩 생성
     const userEmbedding = await getEmbedding(userInput);
+    console.log('사용자 임베딩 생성 완료');
     
     // 감정 분석
     const emotionResults = await analyzeEmotions(userInput, userEmbedding);

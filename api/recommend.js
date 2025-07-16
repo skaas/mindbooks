@@ -60,6 +60,13 @@ async function handleAnalyzeMode(userInput, accumulatedTags, res) {
         emotionTags: analysisResult.selectedTags.emotions,
         conceptTags: analysisResult.selectedTags.concepts
       });
+    } else {
+      const errorText = await analysisResponse.text();
+      console.error('벡터 분석 API 오류:', {
+        status: analysisResponse.status,
+        statusText: analysisResponse.statusText,
+        error: errorText
+      });
     }
   } catch (e) {
     console.error('벡터 분석 오류:', e);
