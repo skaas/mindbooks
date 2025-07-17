@@ -97,12 +97,13 @@ async function analyzeTextWithPrompt(userInput) {
   const emotionLabels = emotions.map(item => ({ label: item.label, description: item.description }));
   const conceptLabels = concepts.map(item => ({ label: item.label, description: item.description }));
 
-  const prompt = `당신은 사용자의 발화를 분석하는 심리 분석 전문가입니다.
-사용자의 발화 내용을 바탕으로, 주어진 '감정'과 '개념' 목록 각각에 대해 얼마나 관련이 있는지 0.0에서 1.0 사이의 점수로 평가해주세요.
+  const prompt = `당신은 사용자의 발화를 분석하는 고도의 심리 분석 전문가입니다.
+사용자의 발화가 다음 목록에 있는 '감정'이나 '개념'을 **실제로 표현하거나, 겪고 있음을 암시하는지** 판단해주세요.
 
-### 지침
-- 각 항목의 'description'을 참고하여 사용자의 발화가 담고 있는 핵심적인 뉘앙스를 파악하세요.
-- 단순히 키워드가 일치하는지 보는 것이 아니라, 문맥적, 의미적 관련성을 깊게 추론하여 점수를 매겨야 합니다.
+### 매우 중요한 지침
+- 단순히 단어가 언급되었다고 해서 높은 점수를 주면 안 됩니다. 예를 들어, "슬픔이 뭔가요?" 라는 질문은 슬픔을 표현하는 것이 아니므로 '슬픔' 점수가 0에 가까워야 합니다.
+- 사용자가 자신의 상태나 기분을 묘사하는 문맥에서 해당 감정이나 개념이 드러날 때만 높은 점수를 부여해야 합니다.
+- 각 항목의 'description'을 깊게 참고하여, 사용자의 발화가 담고 있는 핵심적인 뉘앙스를 파악하세요.
 - 결과는 반드시 JSON 형식으로, 'emotions'와 'concepts'라는 두 개의 키를 가진 객체로 반환해주세요.
 - 각 키의 값은 [{"tag": "태그명", "score": 점수}] 형태의 배열이어야 합니다.
 
